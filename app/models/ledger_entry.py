@@ -1,0 +1,52 @@
+"""
+LedgerEntry model — the single source of truth for all account balances.
+
+Every monetary movement in the system creates a LedgerEntry.  Balances are
+derived by summing entries, never stored as a running total elsewhere.
+
+Account types (MVP):
+  cash   — physical cash in the drawer
+  float  — mobile money float (M-Pesa, Airtel, etc.)
+
+Entry types:
+  seed   — written once at onboarding to establish the opening state
+  credit — money coming in  (increases balance)
+  debit  — money going out (decreases balance)
+
+Derived balance for an account:
+  SUM(amount) WHERE entry_type IN ('seed', 'credit')
+  - SUM(amount) WHERE entry_type = 'debit'
+"""
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, String
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+
+from app.core.database import Base
+
+
+class LedgerEntry(Base):
+    __tablename__ = "ledger_entries"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
+
+    # "cash" | "float"  (expandable: "bank", "mpesa", etc.)
+    account_type = Column(String, nullable=False)
+
+    # "seed" | "credit" | "debit"
+    entry_type = Column(String, nullable=False)
+
+    # Always positive; direction is determined by entry_type
+    amount = Column(Numeric(14, 2), nullable=False)
+
+    description = Column(String, nullable=True)
+
+    # Optional FK to transactions.id — links a ledger entry to its source
+    reference_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    business = relationship("Business", back_populates="ledger_entries")
+    creator = relationship("User", foreign_keys=[created_by])

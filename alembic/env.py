@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from app.core.database import Base
 from app.core.config import get_settings
-from app.models import User, Person, Transaction, OpeningBalance
+from app.models import User, Person, Transaction, Business, LedgerEntry
 
 config = context.config
 settings = get_settings()

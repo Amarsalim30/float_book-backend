@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
-from app.routers import auth, dashboard, transactions, people, setup
+from app.routers import auth, dashboard, transactions, people, onboarding
 
 settings = get_settings()
 
@@ -20,7 +20,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix=settings.API_PREFIX)
-app.include_router(setup.router, prefix=settings.API_PREFIX)
+app.include_router(onboarding.router, prefix=settings.API_PREFIX)
 app.include_router(dashboard.router, prefix=settings.API_PREFIX)
 app.include_router(transactions.router, prefix=settings.API_PREFIX)
 app.include_router(people.router, prefix=settings.API_PREFIX)
