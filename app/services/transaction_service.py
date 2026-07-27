@@ -1,7 +1,10 @@
+import logging
 from dataclasses import dataclass
 from typing import Literal
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from app.models.user import User
 from app.repositories import business_repository, ledger_repository, transaction_repository
@@ -122,10 +125,17 @@ def create(db: Session, current_user: User, request: TransactionCreate) -> Trans
         raise
     except Exception as exc:
         db.rollback()
+        logger.error(
+            "Transaction recording failed for user_id=%s: %s",
+            current_user.id,
+            exc,
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to record transaction: {exc}",
         ) from exc
+
 
 
 def get_all(
