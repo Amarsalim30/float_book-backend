@@ -43,10 +43,12 @@ class LedgerEntry(Base):
     description = Column(String, nullable=True)
 
     # Optional FK to transactions.id — links a ledger entry to its source
-    reference_id = Column(Integer, ForeignKey("transactions.id"), nullable=True)
+    transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True, index=True)
 
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     business = relationship("Business", back_populates="ledger_entries")
+    transaction = relationship("Transaction", back_populates="ledger_entries")
     creator = relationship("User", foreign_keys=[created_by])
+

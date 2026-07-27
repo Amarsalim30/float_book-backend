@@ -1,8 +1,28 @@
+from datetime import datetime
+from decimal import Decimal
+from typing import List, Optional
 from pydantic import BaseModel
 
 
+class LedgerEffect(BaseModel):
+    account_type: str  # "cash" | "float"
+    direction: str  # "credit" | "debit"
+    amount: Decimal
+
+
+class ActivityItem(BaseModel):
+    id: int
+    type: str  # "sale" | "expense" | "withdrawal" | "add_float"
+    description: Optional[str] = None
+    amount: Decimal
+    created_at: datetime
+    effects: List[LedgerEffect]
+
+
 class DashboardResponse(BaseModel):
-    cash: float
-    float: float
-    receivables: float
-    payables: float
+    business_name: str
+    cash_balance: Decimal
+    float_balance: Decimal
+    today_activity: List[ActivityItem]
+    day_closed: bool = False
+    closing_variance: Optional[Decimal] = None

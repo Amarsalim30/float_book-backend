@@ -48,7 +48,7 @@ def create_entry(
     amount: Decimal,
     created_by: int,
     description: str | None = None,
-    reference_id: int | None = None,
+    transaction_id: int | None = None,
 ) -> LedgerEntry:
     """Insert a credit or debit ledger entry.
 
@@ -60,11 +60,12 @@ def create_entry(
         entry_type=entry_type,
         amount=amount,
         description=description,
-        reference_id=reference_id,
+        transaction_id=transaction_id,
         created_by=created_by,
     )
     db.add(entry)
     return entry
+
 
 
 def get_balance(db: Session, business_id: int, account_type: AccountType) -> Decimal:

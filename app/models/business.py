@@ -48,3 +48,5 @@ class Business(Base):
 
     owner = relationship("User", backref="business", uselist=False)
     ledger_entries = relationship("LedgerEntry", back_populates="business")
+    transactions = relationship("Transaction", back_populates="business")
+
