@@ -4,6 +4,7 @@ from app.services import (
     dashboard_service,
     people_service,
     onboarding_service,
+    mpesa_service,
 )
 
 __all__ = [
@@ -12,4 +13,6 @@ __all__ = [
     "dashboard_service",
     "people_service",
     "onboarding_service",
+    "mpesa_service",
 ]
+

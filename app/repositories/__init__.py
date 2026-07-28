@@ -4,6 +4,7 @@ from app.repositories import (
     person_repository,
     business_repository,
     ledger_repository,
+    mpesa_repository,
 )
 
 __all__ = [
@@ -12,4 +13,6 @@ __all__ = [
     "person_repository",
     "business_repository",
     "ledger_repository",
+    "mpesa_repository",
 ]
+

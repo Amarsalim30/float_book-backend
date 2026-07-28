@@ -11,6 +11,9 @@ class Transaction(Base):
     business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
     type = Column(String, nullable=False)  # sale, expense, withdrawal, add_float, transfer, etc.
     amount = Column(Numeric(14, 2), nullable=False)
+    amount_received = Column(Numeric(14, 2), nullable=True)
+    change_amount = Column(Numeric(14, 2), nullable=True, default=0.00)
+    payment_method = Column(String, nullable=True)  # cash | mpesa
     description = Column(String, nullable=True)
     reference = Column(String, nullable=True)
     person_id = Column(Integer, ForeignKey("people.id"), nullable=True)
@@ -21,4 +24,5 @@ class Transaction(Base):
     business = relationship("Business", back_populates="transactions")
     person = relationship("Person", back_populates="transactions")
     ledger_entries = relationship("LedgerEntry", back_populates="transaction")
+    mpesa_message = relationship("MpesaMessage", back_populates="transaction", uselist=False)
 

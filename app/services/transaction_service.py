@@ -1,5 +1,6 @@
 import logging
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Literal
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -7,7 +8,7 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 from app.models.user import User
-from app.repositories import business_repository, ledger_repository, transaction_repository
+from app.repositories import business_repository, ledger_repository, mpesa_repository, transaction_repository
 from app.schemas.transaction import (
     LedgerEffectResponse,
     TransactionCreate,
@@ -20,47 +21,7 @@ from app.schemas.transaction import (
 class EffectSpec:
     account_type: Literal["cash", "float"]
     direction: Literal["credit", "debit"]
-
-
-def _resolve_effects(request: TransactionCreate) -> list[EffectSpec]:
-    match request.type:
-        case "sale":
-            account = request.account_type or "float"
-            if account not in ("cash", "float"):
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="account_type must be 'cash' or 'float'",
-                )
-            return [EffectSpec(account_type=account, direction="credit")]
-
-        case "expense":
-            account = request.account_type or "cash"
-            if account not in ("cash", "float"):
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="account_type must be 'cash' or 'float'",
-                )
-            return [EffectSpec(account_type=account, direction="debit")]
-
-        case "withdrawal":
-            # Customer withdraws cash from agent: Agent receives float (credit), gives cash (debit)
-            return [
-                EffectSpec(account_type="float", direction="credit"),
-                EffectSpec(account_type="cash", direction="debit"),
-            ]
-
-        case "add_float":
-            # Agent buys float: Agent gives cash (debit), receives float (credit)
-            return [
-                EffectSpec(account_type="cash", direction="debit"),
-                EffectSpec(account_type="float", direction="credit"),
-            ]
-
-        case _:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Transaction type '{request.type}' is not yet supported",
-            )
+    amount: Decimal
 
 
 def create(db: Session, current_user: User, request: TransactionCreate) -> TransactionResponse:
@@ -71,13 +32,93 @@ def create(db: Session, current_user: User, request: TransactionCreate) -> Trans
             detail="Business not found for user. Complete onboarding first.",
         )
 
-    effects_spec = _resolve_effects(request)
+    sale_amount = request.amount
+    amount_received = sale_amount
+    change_amount = Decimal("0.00")
+    payment_method = request.payment_method
+    effects_spec: list[EffectSpec] = []
 
+    if request.type == "sale":
+        if not payment_method or payment_method not in ("cash", "mpesa"):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="payment_method must be 'cash' or 'mpesa' for a sale",
+            )
+
+        if payment_method == "cash" and request.mpesa_message_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="M-Pesa SMS cannot be attached to a cash sale",
+            )
+
+        amount_received = (
+            request.amount_received
+            if request.amount_received is not None
+            else sale_amount
+        )
+
+        if amount_received < sale_amount:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Amount received cannot be less than sale amount",
+            )
+
+        change_amount = amount_received - sale_amount
+
+        if payment_method == "cash":
+            effects_spec = [
+                EffectSpec(account_type="cash", direction="credit", amount=sale_amount)
+            ]
+        else:  # mpesa
+            effects_spec = [
+                EffectSpec(account_type="float", direction="credit", amount=amount_received)
+            ]
+            if change_amount > 0:
+                effects_spec.append(
+                    EffectSpec(account_type="cash", direction="debit", amount=change_amount)
+                )
+
+    elif request.type == "expense":
+        account = request.account_type or "cash"
+        if account not in ("cash", "float"):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="account_type must be 'cash' or 'float'",
+            )
+        effects_spec = [EffectSpec(account_type=account, direction="debit", amount=request.amount)]
+
+    elif request.type == "withdrawal":
+        effects_spec = [
+            EffectSpec(account_type="float", direction="credit", amount=request.amount),
+            EffectSpec(account_type="cash", direction="debit", amount=request.amount),
+        ]
+
+    elif request.type == "add_float":
+        if request.account_type == "cash":
+            effects_spec = [
+                EffectSpec(account_type="cash", direction="debit", amount=request.amount),
+                EffectSpec(account_type="float", direction="credit", amount=request.amount),
+            ]
+        else:
+            effects_spec = [
+                EffectSpec(account_type="float", direction="credit", amount=request.amount),
+            ]
+
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Transaction type '{request.type}' is not yet supported",
+        )
+
+    # Atomic DB Transaction Block
     try:
         transaction_data = {
             "business_id": business.id,
             "type": request.type,
-            "amount": request.amount,
+            "amount": sale_amount,
+            "amount_received": amount_received if request.type == "sale" else None,
+            "change_amount": change_amount if request.type == "sale" else Decimal("0.00"),
+            "payment_method": payment_method if request.type == "sale" else None,
             "description": request.description,
             "reference": request.reference,
             "person_id": request.person_id,
@@ -85,17 +126,38 @@ def create(db: Session, current_user: User, request: TransactionCreate) -> Trans
         }
         transaction = transaction_repository.create(db, transaction_data)
 
+        # Create Ledger Entries
         for spec in effects_spec:
             ledger_repository.create_entry(
                 db=db,
                 business_id=business.id,
                 account_type=spec.account_type,
                 entry_type=spec.direction,
-                amount=request.amount,
+                amount=spec.amount,
                 created_by=current_user.id,
                 description=request.description or f"{request.type.capitalize()} entry",
                 transaction_id=transaction.id,
             )
+
+        # Link MpesaMessage if provided (for mpesa sale)
+        if request.type == "sale" and request.payment_method == "mpesa" and request.mpesa_message_id is not None:
+            mpesa_msg = mpesa_repository.get_by_id(db, request.mpesa_message_id)
+            if not mpesa_msg or mpesa_msg.business_id != business.id:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="M-Pesa message not found for business",
+                )
+            if mpesa_msg.direction != "MONEY_RECEIVED":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Only MONEY_RECEIVED SMS can be attached to a sale",
+                )
+            if mpesa_msg.transaction_id is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="SMS is already linked to another transaction",
+                )
+            mpesa_msg.transaction_id = transaction.id
 
         db.commit()
         db.refresh(transaction)
@@ -113,6 +175,10 @@ def create(db: Session, current_user: User, request: TransactionCreate) -> Trans
             id=transaction.id,
             type=transaction.type,
             amount=transaction.amount,
+            amount_received=transaction.amount_received,
+            change_amount=transaction.change_amount,
+            payment_method=transaction.payment_method,
+            mpesa_message_id=request.mpesa_message_id if request.type == "sale" else None,
             description=transaction.description,
             reference=transaction.reference,
             person_id=transaction.person_id,
@@ -137,7 +203,6 @@ def create(db: Session, current_user: User, request: TransactionCreate) -> Trans
         ) from exc
 
 
-
 def get_all(
     db: Session,
     current_user: User,
@@ -158,6 +223,10 @@ def get_all(
             id=tx.id,
             type=tx.type,
             amount=tx.amount,
+            amount_received=tx.amount_received,
+            change_amount=tx.change_amount,
+            payment_method=tx.payment_method,
+            mpesa_message_id=tx.mpesa_message.id if tx.mpesa_message else None,
             description=tx.description,
             reference=tx.reference,
             person_id=tx.person_id,
@@ -201,6 +270,10 @@ def get_by_id(db: Session, current_user: User, transaction_id: int) -> Transacti
         id=tx.id,
         type=tx.type,
         amount=tx.amount,
+        amount_received=tx.amount_received,
+        change_amount=tx.change_amount,
+        payment_method=tx.payment_method,
+        mpesa_message_id=tx.mpesa_message.id if tx.mpesa_message else None,
         description=tx.description,
         reference=tx.reference,
         person_id=tx.person_id,
