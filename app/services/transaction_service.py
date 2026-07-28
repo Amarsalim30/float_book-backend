@@ -105,15 +105,9 @@ def create(db: Session, current_user: User, request: TransactionCreate) -> Trans
         ]
 
     elif request.type == "add_float":
-        if request.account_type == "cash":
-            effects_spec = [
-                EffectSpec(account_type="cash", direction="debit", amount=request.amount),
-                EffectSpec(account_type="float", direction="credit", amount=request.amount),
-            ]
-        else:
-            effects_spec = [
-                EffectSpec(account_type="float", direction="credit", amount=request.amount),
-            ]
+        effects_spec = [
+            EffectSpec(account_type="float", direction="credit", amount=request.amount),
+        ]
 
     else:
         raise HTTPException(
