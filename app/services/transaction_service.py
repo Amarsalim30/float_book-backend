@@ -32,10 +32,19 @@ def create(db: Session, current_user: User, request: TransactionCreate) -> Trans
             detail="Business not found for user. Complete onboarding first.",
         )
 
+    # Normalize payment method or account type for all transaction types
+    raw_pm = (request.payment_method or request.account_type or "").lower()
+    if raw_pm in ("mpesa", "float"):
+        payment_method = "mpesa"
+    elif raw_pm == "cash":
+        payment_method = "cash"
+    else:
+        payment_method = request.payment_method
+
     sale_amount = request.amount
     amount_received = sale_amount
     change_amount = Decimal("0.00")
-    payment_method = request.payment_method
+
     effects_spec: list[EffectSpec] = []
 
     if request.type == "sale":
@@ -79,13 +88,15 @@ def create(db: Session, current_user: User, request: TransactionCreate) -> Trans
                 )
 
     elif request.type == "expense":
-        account = request.account_type or "cash"
-        if account not in ("cash", "float"):
+        if not payment_method or payment_method not in ("cash", "mpesa"):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="account_type must be 'cash' or 'float'",
+                detail="payment_method must be 'cash' or 'mpesa' for an expense",
             )
-        effects_spec = [EffectSpec(account_type=account, direction="debit", amount=request.amount)]
+        # Map payment method to the ledger account that gets debited:
+        # cash -> cash debit, mpesa -> float debit
+        ledger_account = "cash" if payment_method == "cash" else "float"
+        effects_spec = [EffectSpec(account_type=ledger_account, direction="debit", amount=request.amount)]
 
     elif request.type == "withdrawal":
         effects_spec = [
@@ -118,7 +129,7 @@ def create(db: Session, current_user: User, request: TransactionCreate) -> Trans
             "amount": sale_amount,
             "amount_received": amount_received if request.type == "sale" else None,
             "change_amount": change_amount if request.type == "sale" else Decimal("0.00"),
-            "payment_method": payment_method if request.type == "sale" else None,
+            "payment_method": payment_method if request.type in ("sale", "expense") else None,
             "description": request.description,
             "reference": request.reference,
             "person_id": request.person_id,
@@ -139,15 +150,15 @@ def create(db: Session, current_user: User, request: TransactionCreate) -> Trans
                 transaction_id=transaction.id,
             )
 
-        # Link MpesaMessage if provided (for mpesa sale)
-        if request.type == "sale" and request.payment_method == "mpesa" and request.mpesa_message_id is not None:
+        # Link MpesaMessage if provided (for sale, withdrawal, or expense)
+        if request.mpesa_message_id is not None:
             mpesa_msg = mpesa_repository.get_by_id(db, request.mpesa_message_id)
             if not mpesa_msg or mpesa_msg.business_id != business.id:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="M-Pesa message not found for business",
                 )
-            if mpesa_msg.direction != "MONEY_RECEIVED":
+            if request.type == "sale" and mpesa_msg.direction != "MONEY_RECEIVED":
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Only MONEY_RECEIVED SMS can be attached to a sale",
@@ -178,7 +189,7 @@ def create(db: Session, current_user: User, request: TransactionCreate) -> Trans
             amount_received=transaction.amount_received,
             change_amount=transaction.change_amount,
             payment_method=transaction.payment_method,
-            mpesa_message_id=request.mpesa_message_id if request.type == "sale" else None,
+            mpesa_message_id=request.mpesa_message_id,
             description=transaction.description,
             reference=transaction.reference,
             person_id=transaction.person_id,
