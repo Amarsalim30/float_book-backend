@@ -4,6 +4,7 @@ from app.models.transaction import Transaction
 from app.models.business import Business
 from app.models.ledger_entry import LedgerEntry
 from app.models.mpesa_message import MpesaMessage
+from app.models.tracked_account import TrackedAccount
 
-__all__ = ["User", "Person", "Transaction", "Business", "LedgerEntry", "MpesaMessage"]
+__all__ = ["User", "Person", "Transaction", "Business", "LedgerEntry", "MpesaMessage", "TrackedAccount"]
 

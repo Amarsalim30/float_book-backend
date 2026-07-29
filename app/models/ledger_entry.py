@@ -31,7 +31,9 @@ class LedgerEntry(Base):
 
     business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
 
-    # "cash" | "float"  (expandable: "bank", "mpesa", etc.)
+    # "cash" | "float" | "tracked"
+    # Invariant: account_type="tracked" → tracked_account_id MUST be set
+    #            account_type="cash"|"float" → tracked_account_id MUST be NULL
     account_type = Column(String, nullable=False)
 
     # "seed" | "credit" | "debit"
@@ -45,10 +47,16 @@ class LedgerEntry(Base):
     # Optional FK to transactions.id — links a ledger entry to its source
     transaction_id = Column(Integer, ForeignKey("transactions.id"), nullable=True, index=True)
 
+    # Optional FK to tracked_accounts.id — set only when account_type="tracked"
+    tracked_account_id = Column(
+        Integer, ForeignKey("tracked_accounts.id"), nullable=True, index=True
+    )
+
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     business = relationship("Business", back_populates="ledger_entries")
     transaction = relationship("Transaction", back_populates="ledger_entries")
+    tracked_account = relationship("TrackedAccount", back_populates="ledger_entries")
     creator = relationship("User", foreign_keys=[created_by])
 

@@ -5,6 +5,7 @@ from app.repositories import (
     business_repository,
     ledger_repository,
     mpesa_repository,
+    tracked_account_repository,
 )
 
 __all__ = [
@@ -14,5 +15,6 @@ __all__ = [
     "business_repository",
     "ledger_repository",
     "mpesa_repository",
+    "tracked_account_repository",
 ]
 

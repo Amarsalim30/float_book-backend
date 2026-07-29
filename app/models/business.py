@@ -50,5 +50,6 @@ class Business(Base):
     ledger_entries = relationship("LedgerEntry", back_populates="business")
     transactions = relationship("Transaction", back_populates="business")
     mpesa_messages = relationship("MpesaMessage", back_populates="business")
+    tracked_accounts = relationship("TrackedAccount", back_populates="business")
 
 
