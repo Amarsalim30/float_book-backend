@@ -76,7 +76,23 @@ def get_ledger_history(
             LedgerEntry.business_id == business_id,
             LedgerEntry.tracked_account_id == account_id,
         )
-        .order_by(LedgerEntry.created_at.desc())
+        .order_by(LedgerEntry.created_at.desc(), LedgerEntry.id.desc())
         .limit(limit)
         .all()
     )
+
+
+def get_all_ledger_history_asc(
+    db: Session, business_id: int, account_id: int
+) -> list[LedgerEntry]:
+    """Return all ledger entries for the account in deterministic chronological order."""
+    return (
+        db.query(LedgerEntry)
+        .filter(
+            LedgerEntry.business_id == business_id,
+            LedgerEntry.tracked_account_id == account_id,
+        )
+        .order_by(LedgerEntry.created_at.asc(), LedgerEntry.id.asc())
+        .all()
+    )
+

@@ -96,11 +96,23 @@ def test_give_money_and_get_money_back_flow(client, auth_headers):
         f"/api/v1/tracked-accounts/{acct_id}", headers=auth_headers
     ).json()
     assert float(detail2["balance"]) == 15000.0
+    assert float(detail2["given"]) == 25000.0
+    assert float(detail2["returned"]) == 10000.0
+    assert detail2["last_transaction"] is not None
     assert len(detail2["history"]) == 2
+
+    # History is returned newest first:
+    # Most recent entry (Get Money Back 10,000 debit): running_balance = 15000.0
+    # First entry (Give Money 25,000 credit): running_balance = 25000.0
+    assert detail2["history"][0]["entry_type"] == "debit"
+    assert float(detail2["history"][0]["running_balance"]) == 15000.0
+    assert detail2["history"][1]["entry_type"] == "credit"
+    assert float(detail2["history"][1]["running_balance"]) == 25000.0
 
     # Verify Float balance recovered to 35,000 (25,000 + 10,000)
     dash2 = client.get("/api/v1/dashboard/", headers=auth_headers).json()
     assert float(dash2["float_balance"]) == 35000.0
+
 
 
 def test_overdraft_prevention_on_get_money_back(client, auth_headers):

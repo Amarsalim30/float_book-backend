@@ -122,9 +122,38 @@ def get_account_detail(
         raise TrackedAccountNotFoundError(account_id)
 
     balance = tracked_account_repository.get_balance(db, business.id, account_id)
-    history_entries = tracked_account_repository.get_ledger_history(
+    asc_entries = tracked_account_repository.get_all_ledger_history_asc(
         db, business.id, account_id
     )
+
+    given = Decimal("0.00")
+    returned = Decimal("0.00")
+    running_balance = Decimal("0.00")
+    history_with_running: list[LedgerHistoryEntry] = []
+    last_transaction = asc_entries[-1].created_at if asc_entries else None
+
+    for entry in asc_entries:
+        amt = Decimal(str(entry.amount))
+        if entry.entry_type == "credit":
+            given += amt
+            running_balance += amt
+        elif entry.entry_type == "debit":
+            returned += amt
+            running_balance -= amt
+
+        history_with_running.append(
+            LedgerHistoryEntry(
+                id=entry.id,
+                entry_type=entry.entry_type,
+                amount=amt,
+                description=entry.description,
+                created_at=entry.created_at,
+                running_balance=running_balance,
+            )
+        )
+
+    # Return newest entries first for presentation
+    history_with_running.reverse()
 
     return TrackedAccountDetail(
         id=account.id,
@@ -133,18 +162,13 @@ def get_account_detail(
         phone=account.phone,
         notes=account.notes,
         balance=balance,
+        given=given,
+        returned=returned,
+        last_transaction=last_transaction,
         created_at=account.created_at,
-        history=[
-            LedgerHistoryEntry(
-                id=e.id,
-                entry_type=e.entry_type,
-                amount=e.amount,
-                description=e.description,
-                created_at=e.created_at,
-            )
-            for e in history_entries
-        ],
+        history=history_with_running,
     )
+
 
 
 def give_money(

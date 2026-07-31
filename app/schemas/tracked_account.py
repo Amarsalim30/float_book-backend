@@ -45,12 +45,17 @@ class LedgerHistoryEntry(BaseModel):
     amount: Decimal
     description: Optional[str] = None
     created_at: datetime
+    running_balance: Decimal = Decimal("0.00")
 
     model_config = {"from_attributes": True}
 
 
 class TrackedAccountDetail(TrackedAccountResponse):
+    given: Decimal = Decimal("0.00")
+    returned: Decimal = Decimal("0.00")
+    last_transaction: Optional[datetime] = None
     history: List[LedgerHistoryEntry] = []
+
 
 
 # ---------------------------------------------------------------------------
