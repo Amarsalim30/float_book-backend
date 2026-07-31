@@ -11,6 +11,8 @@ TransferSourceEnum = Literal["cash", "float", "tracked"]
 class TrackedAccountCreate(BaseModel):
     name: str
     account_type: AccountTypeEnum = "person"
+    position_type: Literal["tracked", "held"] = "tracked"
+    person_id: Optional[int] = None
     phone: Optional[str] = None
     notes: Optional[str] = None
 
@@ -26,9 +28,11 @@ class TrackedAccountResponse(BaseModel):
     id: int
     name: str
     account_type: str
+    position_type: str = "tracked"
+    person_id: Optional[int] = None
     phone: Optional[str] = None
     notes: Optional[str] = None
-    balance: Decimal  # V1: always >= 0 ("holding for you")
+    balance: Decimal  # V1: always >= 0
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -64,7 +68,7 @@ class TrackedAccountDetail(TrackedAccountResponse):
 
 class GiveMoneyRequest(BaseModel):
     """
-    Give Money: Cash/Float → TrackedAccount
+    Give Money: Cash/Float → TrackedAccount (Money I Track)
     """
     source_type: Literal["cash", "float"]
     tracked_account_id: int
@@ -81,10 +85,44 @@ class GiveMoneyRequest(BaseModel):
 
 class GetMoneyBackRequest(BaseModel):
     """
-    Get Money Back: TrackedAccount → Cash/Float
+    Get Money Back: TrackedAccount → Cash/Float (Money I Track)
     """
     tracked_account_id: int
     destination_type: Literal["cash", "float"]
+    amount: Decimal
+    note: Optional[str] = None
+
+    @field_validator("amount")
+    @classmethod
+    def amount_positive(cls, v: Decimal) -> Decimal:
+        if v <= 0:
+            raise ValueError("amount must be greater than 0")
+        return v
+
+
+class ReceiveMoneyRequest(BaseModel):
+    """
+    Receive Money: Contact → Cash/Float (Money Held - increases held balance & cash/float)
+    """
+    tracked_account_id: int
+    destination_type: Literal["cash", "float"]
+    amount: Decimal
+    note: Optional[str] = None
+
+    @field_validator("amount")
+    @classmethod
+    def amount_positive(cls, v: Decimal) -> Decimal:
+        if v <= 0:
+            raise ValueError("amount must be greater than 0")
+        return v
+
+
+class ReturnMoneyRequest(BaseModel):
+    """
+    Return Money: Cash/Float → Contact (Money Held - decreases held balance & cash/float)
+    """
+    tracked_account_id: int
+    source_type: Literal["cash", "float"]
     amount: Decimal
     note: Optional[str] = None
 
@@ -104,3 +142,4 @@ class TransferResponse(BaseModel):
     tracked_account_id: int
     tracked_account_name: str
     note: Optional[str] = None
+

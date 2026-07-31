@@ -203,3 +203,163 @@ def test_multi_tenant_isolation(client, auth_headers):
         },
     )
     assert give_res.status_code == 404
+
+
+def test_receive_and_return_money_flow(client, auth_headers):
+    _complete_onboarding(client, auth_headers, cash=10000.0, float_bal=50000.0)
+
+    # Create held account position
+    acct = client.post(
+        "/api/v1/tracked-accounts/",
+        headers=auth_headers,
+        json={"name": "Amar Deposit", "position_type": "held"},
+    ).json()
+    acct_id = acct["id"]
+
+    # 1. Receive Money: Amar -> Cash (10,000)
+    rec_res = client.post(
+        "/api/v1/tracked-accounts/receive",
+        headers=auth_headers,
+        json={
+            "tracked_account_id": acct_id,
+            "destination_type": "cash",
+            "amount": 10000.0,
+            "note": "Customer deposit",
+        },
+    )
+    assert rec_res.status_code == 201, rec_res.json()
+
+    # Held balance is now 10,000
+    detail = client.get(
+        f"/api/v1/tracked-accounts/{acct_id}", headers=auth_headers
+    ).json()
+    assert float(detail["balance"]) == 10000.0
+
+    # Dashboard cash balance increased to 20,000 (10,000 + 10,000)
+    dash = client.get("/api/v1/dashboard/", headers=auth_headers).json()
+    assert float(dash["cash_balance"]) == 20000.0
+
+    # 2. Return Money: Cash -> Amar (4,000)
+    ret_res = client.post(
+        "/api/v1/tracked-accounts/return",
+        headers=auth_headers,
+        json={
+            "tracked_account_id": acct_id,
+            "source_type": "cash",
+            "amount": 4000.0,
+            "note": "Partial return of deposit",
+        },
+    )
+    assert ret_res.status_code == 201, ret_res.json()
+
+    # Held balance is now 6,000 (10,000 - 4,000)
+    detail2 = client.get(
+        f"/api/v1/tracked-accounts/{acct_id}", headers=auth_headers
+    ).json()
+    assert float(detail2["balance"]) == 6000.0
+
+    # Dashboard cash balance decreased to 16,000 (20,000 - 4,000)
+    dash2 = client.get("/api/v1/dashboard/", headers=auth_headers).json()
+    assert float(dash2["cash_balance"]) == 16000.0
+
+
+def test_critical_no_netting_positions(client, auth_headers):
+    """
+    Test strict dual position separation (No Netting):
+    Amar has Money I Track = 25,000 and Money Held = 10,000.
+    Operations on one position NEVER mutate the other.
+    """
+    _complete_onboarding(client, auth_headers, cash=100000.0, float_bal=100000.0)
+
+    # Create Person
+    p_res = client.post(
+        "/api/v1/people/",
+        json={"name": "Amar", "type": "customer"},
+    )
+    assert p_res.status_code == 201
+    person_id = p_res.json()["id"]
+
+    # Create Money I Track position
+    tracked_acct = client.post(
+        "/api/v1/tracked-accounts/",
+        headers=auth_headers,
+        json={
+            "name": "Amar",
+            "position_type": "tracked",
+            "person_id": person_id,
+        },
+    ).json()
+
+    # Create Money Held position
+    held_acct = client.post(
+        "/api/v1/tracked-accounts/",
+        headers=auth_headers,
+        json={
+            "name": "Amar",
+            "position_type": "held",
+            "person_id": person_id,
+        },
+    ).json()
+
+    # 1. Give Money: 25,000 to Money I Track
+    client.post(
+        "/api/v1/tracked-accounts/give",
+        headers=auth_headers,
+        json={
+            "source_type": "cash",
+            "tracked_account_id": tracked_acct["id"],
+            "amount": 25000.0,
+        },
+    )
+
+    # 2. Receive Money: 10,000 into Money Held
+    client.post(
+        "/api/v1/tracked-accounts/receive",
+        headers=auth_headers,
+        json={
+            "destination_type": "cash",
+            "tracked_account_id": held_acct["id"],
+            "amount": 10000.0,
+        },
+    )
+
+    # Assert initial balances: Tracked = 25,000, Held = 10,000
+    t_bal = float(client.get(f"/api/v1/tracked-accounts/{tracked_acct['id']}", headers=auth_headers).json()["balance"])
+    h_bal = float(client.get(f"/api/v1/tracked-accounts/{held_acct['id']}", headers=auth_headers).json()["balance"])
+    assert t_bal == 25000.0
+    assert h_bal == 10000.0
+
+    # 3. Get Money Back = 10,000 from Money I Track
+    client.post(
+        "/api/v1/tracked-accounts/get-back",
+        headers=auth_headers,
+        json={
+            "tracked_account_id": tracked_acct["id"],
+            "destination_type": "cash",
+            "amount": 10000.0,
+        },
+    )
+
+    # Expected: Money I Track = 15,000, Money Held = 10,000 (held unchanged)
+    t_bal2 = float(client.get(f"/api/v1/tracked-accounts/{tracked_acct['id']}", headers=auth_headers).json()["balance"])
+    h_bal2 = float(client.get(f"/api/v1/tracked-accounts/{held_acct['id']}", headers=auth_headers).json()["balance"])
+    assert t_bal2 == 15000.0
+    assert h_bal2 == 10000.0
+
+    # 4. Return Money = 5,000 from Money Held
+    client.post(
+        "/api/v1/tracked-accounts/return",
+        headers=auth_headers,
+        json={
+            "tracked_account_id": held_acct["id"],
+            "source_type": "cash",
+            "amount": 5000.0,
+        },
+    )
+
+    # Expected: Money I Track = 15,000 (tracked unchanged), Money Held = 5,000
+    t_bal3 = float(client.get(f"/api/v1/tracked-accounts/{tracked_acct['id']}", headers=auth_headers).json()["balance"])
+    h_bal3 = float(client.get(f"/api/v1/tracked-accounts/{held_acct['id']}", headers=auth_headers).json()["balance"])
+    assert t_bal3 == 15000.0
+    assert h_bal3 == 5000.0
+

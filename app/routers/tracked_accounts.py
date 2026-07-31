@@ -24,6 +24,8 @@ from app.models.user import User
 from app.schemas.tracked_account import (
     GetMoneyBackRequest,
     GiveMoneyRequest,
+    ReceiveMoneyRequest,
+    ReturnMoneyRequest,
     TrackedAccountCreate,
     TrackedAccountDetail,
     TrackedAccountList,
@@ -140,3 +142,54 @@ def get_money_back(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
+
+
+@router.post(
+    "/receive",
+    response_model=TransferResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Receive Money — receive money from contact into Cash or Float (Money Held position)",
+)
+def receive_money(
+    request: ReceiveMoneyRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        return tracked_account_service.receive_money(db, current_user, request)
+    except TrackedAccountOwnershipError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+
+@router.post(
+    "/return",
+    response_model=TransferResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Return Money — return held money back to contact from Cash or Float (Money Held position)",
+)
+def return_money(
+    request: ReturnMoneyRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        return tracked_account_service.return_money(db, current_user, request)
+    except InsufficientTrackedBalanceError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "insufficient_tracked_balance",
+                "name": exc.name,
+                "available": exc.available,
+                "requested": exc.requested,
+            },
+        ) from exc
+    except TrackedAccountOwnershipError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+

@@ -28,6 +28,8 @@ from app.schemas.tracked_account import (
     GetMoneyBackRequest,
     GiveMoneyRequest,
     LedgerHistoryEntry,
+    ReceiveMoneyRequest,
+    ReturnMoneyRequest,
     TrackedAccountCreate,
     TrackedAccountDetail,
     TrackedAccountList,
@@ -61,6 +63,8 @@ def create_account(
             "business_id": business.id,
             "name": request.name,
             "account_type": request.account_type,
+            "position_type": request.position_type,
+            "person_id": request.person_id,
             "phone": request.phone,
             "notes": request.notes,
             "created_by": current_user.id,
@@ -76,6 +80,8 @@ def create_account(
             id=account.id,
             name=account.name,
             account_type=account.account_type,
+            position_type=account.position_type,
+            person_id=account.person_id,
             phone=account.phone,
             notes=account.notes,
             balance=balance,
@@ -99,6 +105,8 @@ def get_all_accounts(
             id=a.id,
             name=a.name,
             account_type=a.account_type,
+            position_type=a.position_type,
+            person_id=a.person_id,
             phone=a.phone,
             notes=a.notes,
             balance=tracked_account_repository.get_balance(db, business.id, a.id),
@@ -159,6 +167,8 @@ def get_account_detail(
         id=account.id,
         name=account.name,
         account_type=account.account_type,
+        position_type=account.position_type,
+        person_id=account.person_id,
         phone=account.phone,
         notes=account.notes,
         balance=balance,
@@ -334,6 +344,178 @@ def get_money_back(
             transaction_id=txn.id,
             source_type="tracked",
             destination_type=request.destination_type,
+            amount=request.amount,
+            tracked_account_id=account.id,
+            tracked_account_name=account.name,
+            note=request.note,
+        )
+
+    except Exception:
+        db.rollback()
+        raise
+
+
+def receive_money(
+    db: Session,
+    current_user,
+    request: ReceiveMoneyRequest,
+) -> TransferResponse:
+    """
+    Receive Money: Contact → Cash/Float (Money Held position).
+
+    Increases Money Held balance (+ credit entry) and Cash/Float (+ credit entry).
+    """
+    business = _get_business_or_raise(db, current_user.id)
+
+    # Verify tracked account belongs to this business
+    account = tracked_account_repository.get_by_id(
+        db, business.id, request.tracked_account_id
+    )
+    if not account:
+        raise TrackedAccountOwnershipError(request.tracked_account_id)
+
+    try:
+        txn = Transaction(
+            business_id=business.id,
+            type="transfer",
+            amount=request.amount,
+            description=request.note or f"Receive money from {account.name}",
+            created_by=current_user.id,
+        )
+        db.add(txn)
+        db.flush()
+
+        # Credit destination Cash/Float (increases operational balance)
+        db.add(
+            LedgerEntry(
+                business_id=business.id,
+                transaction_id=txn.id,
+                account_type=request.destination_type,
+                tracked_account_id=None,
+                entry_type="credit",
+                amount=request.amount,
+                description=request.note or f"Receive money from {account.name}",
+                created_by=current_user.id,
+            )
+        )
+
+        # Credit held position account (increases held balance)
+        db.add(
+            LedgerEntry(
+                business_id=business.id,
+                transaction_id=txn.id,
+                account_type="tracked",
+                tracked_account_id=account.id,
+                entry_type="credit",
+                amount=request.amount,
+                description=request.note or f"Receive money from {account.name}",
+                created_by=current_user.id,
+            )
+        )
+
+        db.commit()
+
+        return TransferResponse(
+            transaction_id=txn.id,
+            source_type="contact",
+            destination_type=request.destination_type,
+            amount=request.amount,
+            tracked_account_id=account.id,
+            tracked_account_name=account.name,
+            note=request.note,
+        )
+
+    except Exception:
+        db.rollback()
+        raise
+
+
+def return_money(
+    db: Session,
+    current_user,
+    request: ReturnMoneyRequest,
+) -> TransferResponse:
+    """
+    Return Money: Cash/Float → Contact (Money Held position).
+
+    Decreases Money Held balance (- debit entry) and Cash/Float (- debit entry).
+    """
+    business = _get_business_or_raise(db, current_user.id)
+
+    # Verify tracked account belongs to this business
+    account = tracked_account_repository.get_by_id(
+        db, business.id, request.tracked_account_id
+    )
+    if not account:
+        raise TrackedAccountOwnershipError(request.tracked_account_id)
+
+    # Validate source operational Cash/Float balance
+    source_balance = ledger_repository.get_balance(db, business.id, request.source_type)
+    if request.amount > source_balance:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Insufficient {request.source_type} balance. "
+                f"Available: KSh {source_balance:,.2f}, Requested: KSh {request.amount:,.2f}"
+            ),
+        )
+
+    # Validate held account balance (never allow held balance to go below 0)
+    held_balance = tracked_account_repository.get_balance(
+        db, business.id, account.id
+    )
+    if request.amount > held_balance:
+        raise InsufficientTrackedBalanceError(
+            name=account.name,
+            requested=float(request.amount),
+            available=float(held_balance),
+        )
+
+    try:
+        txn = Transaction(
+            business_id=business.id,
+            type="transfer",
+            amount=request.amount,
+            description=request.note or f"Return money to {account.name}",
+            created_by=current_user.id,
+        )
+        db.add(txn)
+        db.flush()
+
+        # Debit source Cash/Float (decreases operational balance)
+        db.add(
+            LedgerEntry(
+                business_id=business.id,
+                transaction_id=txn.id,
+                account_type=request.source_type,
+                tracked_account_id=None,
+                entry_type="debit",
+                amount=request.amount,
+                description=request.note or f"Return money to {account.name}",
+                created_by=current_user.id,
+            )
+        )
+
+        # Debit held position account (decreases held balance)
+        db.add(
+            LedgerEntry(
+                business_id=business.id,
+                transaction_id=txn.id,
+                account_type="tracked",
+                tracked_account_id=account.id,
+                entry_type="debit",
+                amount=request.amount,
+                description=request.note or f"Return money to {account.name}",
+                created_by=current_user.id,
+            )
+        )
+
+        db.commit()
+
+        return TransferResponse(
+            transaction_id=txn.id,
+            source_type=request.source_type,
+            destination_type="contact",
             amount=request.amount,
             tracked_account_id=account.id,
             tracked_account_name=account.name,

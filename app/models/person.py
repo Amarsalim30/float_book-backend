@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, and_
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -17,3 +17,19 @@ class Person(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     transactions = relationship("Transaction", back_populates="person")
+    tracked_accounts = relationship("TrackedAccount", back_populates="person")
+
+    tracked_account = relationship(
+        "TrackedAccount",
+        primaryjoin="and_(Person.id==TrackedAccount.person_id, TrackedAccount.position_type=='tracked')",
+        uselist=False,
+        overlaps="tracked_accounts",
+    )
+    held_account = relationship(
+        "TrackedAccount",
+        primaryjoin="and_(Person.id==TrackedAccount.person_id, TrackedAccount.position_type=='held')",
+        uselist=False,
+        overlaps="tracked_account,tracked_accounts",
+    )
+
+

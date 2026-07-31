@@ -29,6 +29,21 @@ def get_by_id(db: Session, business_id: int, account_id: int) -> TrackedAccount 
     )
 
 
+def get_by_person_and_position(
+    db: Session, business_id: int, person_id: int, position_type: str
+) -> TrackedAccount | None:
+    return (
+        db.query(TrackedAccount)
+        .filter(
+            TrackedAccount.business_id == business_id,
+            TrackedAccount.person_id == person_id,
+            TrackedAccount.position_type == position_type,
+        )
+        .first()
+    )
+
+
+
 def get_all(db: Session, business_id: int) -> list[TrackedAccount]:
     return (
         db.query(TrackedAccount)
