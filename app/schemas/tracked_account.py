@@ -2,7 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 AccountTypeEnum = Literal["person", "business", "bank", "owner"]
 TransferSourceEnum = Literal["cash", "float", "tracked"]
@@ -71,7 +71,8 @@ class GiveMoneyRequest(BaseModel):
     Give Money: Cash/Float → TrackedAccount (Money I Track)
     """
     source_type: Literal["cash", "float"]
-    tracked_account_id: int
+    person_id: Optional[int] = None
+    tracked_account_id: Optional[int] = None
     amount: Decimal
     note: Optional[str] = None
 
@@ -81,14 +82,21 @@ class GiveMoneyRequest(BaseModel):
         if v <= 0:
             raise ValueError("amount must be greater than 0")
         return v
+
+    @model_validator(mode="after")
+    def check_target_identity(self):
+        if self.person_id is None and self.tracked_account_id is None:
+            raise ValueError("Either person_id or tracked_account_id must be provided")
+        return self
 
 
 class GetMoneyBackRequest(BaseModel):
     """
     Get Money Back: TrackedAccount → Cash/Float (Money I Track)
     """
-    tracked_account_id: int
     destination_type: Literal["cash", "float"]
+    person_id: Optional[int] = None
+    tracked_account_id: Optional[int] = None
     amount: Decimal
     note: Optional[str] = None
 
@@ -98,14 +106,21 @@ class GetMoneyBackRequest(BaseModel):
         if v <= 0:
             raise ValueError("amount must be greater than 0")
         return v
+
+    @model_validator(mode="after")
+    def check_target_identity(self):
+        if self.person_id is None and self.tracked_account_id is None:
+            raise ValueError("Either person_id or tracked_account_id must be provided")
+        return self
 
 
 class ReceiveMoneyRequest(BaseModel):
     """
     Receive Money: Contact → Cash/Float (Money Held - increases held balance & cash/float)
     """
-    tracked_account_id: int
     destination_type: Literal["cash", "float"]
+    person_id: Optional[int] = None
+    tracked_account_id: Optional[int] = None
     amount: Decimal
     note: Optional[str] = None
 
@@ -115,14 +130,21 @@ class ReceiveMoneyRequest(BaseModel):
         if v <= 0:
             raise ValueError("amount must be greater than 0")
         return v
+
+    @model_validator(mode="after")
+    def check_target_identity(self):
+        if self.person_id is None and self.tracked_account_id is None:
+            raise ValueError("Either person_id or tracked_account_id must be provided")
+        return self
 
 
 class ReturnMoneyRequest(BaseModel):
     """
     Return Money: Cash/Float → Contact (Money Held - decreases held balance & cash/float)
     """
-    tracked_account_id: int
     source_type: Literal["cash", "float"]
+    person_id: Optional[int] = None
+    tracked_account_id: Optional[int] = None
     amount: Decimal
     note: Optional[str] = None
 
@@ -132,6 +154,12 @@ class ReturnMoneyRequest(BaseModel):
         if v <= 0:
             raise ValueError("amount must be greater than 0")
         return v
+
+    @model_validator(mode="after")
+    def check_target_identity(self):
+        if self.person_id is None and self.tracked_account_id is None:
+            raise ValueError("Either person_id or tracked_account_id must be provided")
+        return self
 
 
 class TransferResponse(BaseModel):

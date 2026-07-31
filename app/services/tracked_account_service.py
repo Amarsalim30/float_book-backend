@@ -22,8 +22,14 @@ from app.core.exceptions import (
     TrackedAccountOwnershipError,
 )
 from app.models.ledger_entry import LedgerEntry
+from app.models.tracked_account import TrackedAccount
 from app.models.transaction import Transaction
-from app.repositories import business_repository, ledger_repository, tracked_account_repository
+from app.repositories import (
+    business_repository,
+    ledger_repository,
+    person_repository,
+    tracked_account_repository,
+)
 from app.schemas.tracked_account import (
     GetMoneyBackRequest,
     GiveMoneyRequest,
@@ -180,6 +186,80 @@ def get_account_detail(
     )
 
 
+def resolve_position(
+    db: Session,
+    business_id: int,
+    person_id: int | None,
+    tracked_account_id: int | None,
+    position_type: str,
+) -> TrackedAccount | None:
+    """Look up an existing position account for a person or tracked account ID."""
+    if person_id is not None:
+        account = tracked_account_repository.get_by_person_and_position(
+            db, business_id, person_id, position_type
+        )
+        if account:
+            return account
+
+    if tracked_account_id is not None:
+        account = tracked_account_repository.get_by_id(db, business_id, tracked_account_id)
+        if account:
+            if account.position_type == position_type:
+                return account
+            elif account.person_id is not None:
+                return tracked_account_repository.get_by_person_and_position(
+                    db, business_id, account.person_id, position_type
+                )
+    return None
+
+
+def create_position_if_missing(
+    db: Session,
+    business_id: int,
+    person_id: int | None,
+    tracked_account_id: int | None,
+    position_type: str,
+    creator_id: int,
+) -> TrackedAccount:
+    """Create a position account for a person/contact if it does not exist yet."""
+    existing = resolve_position(db, business_id, person_id, tracked_account_id, position_type)
+    if existing:
+        return existing
+
+    name = "Contact"
+    phone = None
+    account_type = "person"
+    target_person_id = person_id
+
+    if person_id is not None:
+        person = person_repository.get_by_id(db, person_id)
+        if not person:
+            raise TrackedAccountOwnershipError(person_id)
+        name = person.name
+        phone = person.phone
+    elif tracked_account_id is not None:
+        ref_account = tracked_account_repository.get_by_id(db, business_id, tracked_account_id)
+        if not ref_account:
+            raise TrackedAccountOwnershipError(tracked_account_id)
+        name = ref_account.name
+        phone = ref_account.phone
+        account_type = ref_account.account_type
+        target_person_id = ref_account.person_id
+
+    data = {
+        "business_id": business_id,
+        "person_id": target_person_id,
+        "name": name,
+        "account_type": account_type,
+        "position_type": position_type,
+        "phone": phone,
+        "created_by": creator_id,
+    }
+    account = tracked_account_repository.create(db, data)
+    db.flush()
+    return account
+
+
 
 def give_money(
     db: Session,
@@ -187,18 +267,19 @@ def give_money(
     request: GiveMoneyRequest,
 ) -> TransferResponse:
     """
-    Give Money: Cash/Float → TrackedAccount.
-
-    Debit source operational account; Credit tracked account.
+    Give Money: Cash/Float → TrackedAccount (Money I Track position).
     """
     business = _get_business_or_raise(db, current_user.id)
 
-    # Verify tracked account belongs to this business
-    account = tracked_account_repository.get_by_id(
-        db, business.id, request.tracked_account_id
+    # Resolve or create Money I Track position account
+    account = create_position_if_missing(
+        db,
+        business.id,
+        request.person_id,
+        request.tracked_account_id,
+        "tracked",
+        current_user.id,
     )
-    if not account:
-        raise TrackedAccountOwnershipError(request.tracked_account_id)
 
     # Validate source balance using existing repository (Cash/Float rules unchanged)
     source_balance = ledger_repository.get_balance(db, business.id, request.source_type)
@@ -274,18 +355,16 @@ def get_money_back(
     request: GetMoneyBackRequest,
 ) -> TransferResponse:
     """
-    Get Money Back: TrackedAccount → Cash/Float.
-
-    Debit tracked account; Credit destination operational account.
+    Get Money Back: TrackedAccount → Cash/Float (Money I Track position).
     """
     business = _get_business_or_raise(db, current_user.id)
 
-    # Verify tracked account belongs to this business
-    account = tracked_account_repository.get_by_id(
-        db, business.id, request.tracked_account_id
+    account = resolve_position(
+        db, business.id, request.person_id, request.tracked_account_id, "tracked"
     )
     if not account:
-        raise TrackedAccountOwnershipError(request.tracked_account_id)
+        target_id = request.tracked_account_id or request.person_id or 0
+        raise TrackedAccountOwnershipError(target_id)
 
     # Validate TrackedAccount has enough balance (V1: never allow negative)
     tracked_balance = tracked_account_repository.get_balance(
@@ -367,12 +446,15 @@ def receive_money(
     """
     business = _get_business_or_raise(db, current_user.id)
 
-    # Verify tracked account belongs to this business
-    account = tracked_account_repository.get_by_id(
-        db, business.id, request.tracked_account_id
+    # Resolve or create Money Held position account
+    account = create_position_if_missing(
+        db,
+        business.id,
+        request.person_id,
+        request.tracked_account_id,
+        "held",
+        current_user.id,
     )
-    if not account:
-        raise TrackedAccountOwnershipError(request.tracked_account_id)
 
     try:
         txn = Transaction(
@@ -442,12 +524,12 @@ def return_money(
     """
     business = _get_business_or_raise(db, current_user.id)
 
-    # Verify tracked account belongs to this business
-    account = tracked_account_repository.get_by_id(
-        db, business.id, request.tracked_account_id
+    account = resolve_position(
+        db, business.id, request.person_id, request.tracked_account_id, "held"
     )
     if not account:
-        raise TrackedAccountOwnershipError(request.tracked_account_id)
+        target_id = request.tracked_account_id or request.person_id or 0
+        raise TrackedAccountOwnershipError(target_id)
 
     # Validate source operational Cash/Float balance
     source_balance = ledger_repository.get_balance(db, business.id, request.source_type)

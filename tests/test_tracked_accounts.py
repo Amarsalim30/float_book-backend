@@ -363,3 +363,49 @@ def test_critical_no_netting_positions(client, auth_headers):
     assert t_bal3 == 15000.0
     assert h_bal3 == 5000.0
 
+
+def test_person_id_transfer_auto_creation_and_routing(client, auth_headers):
+    _complete_onboarding(client, auth_headers, cash=50000.0, float_bal=50000.0)
+
+    # 1. Create a person (contact)
+    p_res = client.post(
+        "/api/v1/people/",
+        headers=auth_headers,
+        json={"name": "Sarah Contact", "phone": "0700111222", "type": "customer"},
+    ).json()
+    person_id = p_res["id"]
+
+    # 2. Receive Money passing person_id (no held position exists yet)
+    rec_res = client.post(
+        "/api/v1/tracked-accounts/receive",
+        headers=auth_headers,
+        json={
+            "person_id": person_id,
+            "destination_type": "cash",
+            "amount": 7500.0,
+        },
+    )
+    assert rec_res.status_code == 201, rec_res.json()
+
+    # Verify person summary now reflects Money Held = 7,500
+    person_detail = client.get(f"/api/v1/people/{person_id}", headers=auth_headers).json()
+    assert float(person_detail["money_held"]["balance"]) == 7500.0
+
+    # 3. Give Money passing person_id (no tracked position exists yet)
+    give_res = client.post(
+        "/api/v1/tracked-accounts/give",
+        headers=auth_headers,
+        json={
+            "person_id": person_id,
+            "source_type": "cash",
+            "amount": 12000.0,
+        },
+    )
+    assert give_res.status_code == 201, give_res.json()
+
+    # Verify person summary now reflects Money Tracked = 12,000 and Money Held = 7,500 independently
+    person_detail2 = client.get(f"/api/v1/people/{person_id}", headers=auth_headers).json()
+    assert float(person_detail2["money_i_track"]["balance"]) == 12000.0
+    assert float(person_detail2["money_held"]["balance"]) == 7500.0
+
+

@@ -1,12 +1,14 @@
 """
-Tracked Accounts router — "Money I Track" module.
+Tracked Accounts router — "Money I Track" & "Money Held" modules.
 
 Endpoints:
   POST   /tracked-accounts/           Create a new tracked account
   GET    /tracked-accounts/           List all accounts with balances
-  GET    /tracked-accounts/{id}       Detail + ledger history
   POST   /tracked-accounts/give       Give Money (Cash/Float → TrackedAccount)
   POST   /tracked-accounts/get-back   Get Money Back (TrackedAccount → Cash/Float)
+  POST   /tracked-accounts/receive    Receive Money (Contact → Cash/Float)
+  POST   /tracked-accounts/return     Return Money (Cash/Float → Contact)
+  GET    /tracked-accounts/{id}       Detail + ledger history
 """
 import logging
 
@@ -40,7 +42,7 @@ router = APIRouter(prefix="/tracked-accounts", tags=["Tracked Accounts"])
 
 
 # ---------------------------------------------------------------------------
-# CRUD
+# CRUD (List & Create)
 # ---------------------------------------------------------------------------
 
 
@@ -70,27 +72,8 @@ def list_tracked_accounts(
     return tracked_account_service.get_all_accounts(db, current_user)
 
 
-@router.get(
-    "/{account_id}",
-    response_model=TrackedAccountDetail,
-    summary="Get a tracked account detail with ledger history",
-)
-def get_tracked_account(
-    account_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    try:
-        return tracked_account_service.get_account_detail(db, current_user, account_id)
-    except TrackedAccountNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(exc),
-        ) from exc
-
-
 # ---------------------------------------------------------------------------
-# Transfers
+# Transfers (Static routes MUST be declared before /{account_id})
 # ---------------------------------------------------------------------------
 
 
@@ -193,3 +176,26 @@ def return_money(
             detail=str(exc),
         ) from exc
 
+
+# ---------------------------------------------------------------------------
+# Detail (Dynamic route /{account_id} placed LAST)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/{account_id}",
+    response_model=TrackedAccountDetail,
+    summary="Get a tracked account detail with ledger history",
+)
+def get_tracked_account(
+    account_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        return tracked_account_service.get_account_detail(db, current_user, account_id)
+    except TrackedAccountNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
