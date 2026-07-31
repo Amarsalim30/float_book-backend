@@ -5,7 +5,7 @@ from pydantic import BaseModel, field_validator
 
 
 class TransactionCreate(BaseModel):
-    type: str  # sale | expense | withdrawal | add_float | transfer | repayment | payment
+    type: str  # sale | expense | withdrawal | add_float | add_cash | transfer | repayment | payment
     amount: Decimal  # Canonical Sale Amount for sales
     amount_received: Optional[Decimal] = None
     payment_method: Optional[str] = None  # "cash" | "mpesa"
@@ -23,6 +23,7 @@ class TransactionCreate(BaseModel):
             "expense",
             "withdrawal",
             "add_float",
+            "add_cash",
             "transfer",
             "repayment",
             "payment",

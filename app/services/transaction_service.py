@@ -109,6 +109,11 @@ def create(db: Session, current_user: User, request: TransactionCreate) -> Trans
             EffectSpec(account_type="float", direction="credit", amount=request.amount),
         ]
 
+    elif request.type == "add_cash":
+        effects_spec = [
+            EffectSpec(account_type="cash", direction="credit", amount=request.amount),
+        ]
+
     else:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -140,7 +145,7 @@ def create(db: Session, current_user: User, request: TransactionCreate) -> Trans
                 entry_type=spec.direction,
                 amount=spec.amount,
                 created_by=current_user.id,
-                description=request.description or f"{request.type.capitalize()} entry",
+                description=request.description or f"{request.type.replace('_', ' ').title()} entry",
                 transaction_id=transaction.id,
             )
 

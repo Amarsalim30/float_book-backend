@@ -9,7 +9,7 @@ class Transaction(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
-    type = Column(String, nullable=False)  # sale, expense, withdrawal, add_float, transfer, etc.
+    type = Column(String, nullable=False)  # sale, expense, withdrawal, add_float, add_cash, transfer, etc.
     amount = Column(Numeric(14, 2), nullable=False)
     amount_received = Column(Numeric(14, 2), nullable=True)
     change_amount = Column(Numeric(14, 2), nullable=True, default=0.00)

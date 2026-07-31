@@ -12,7 +12,7 @@ class LedgerEffect(BaseModel):
 
 class ActivityItem(BaseModel):
     id: int
-    type: str  # "sale" | "expense" | "withdrawal" | "add_float"
+    type: str  # "sale" | "expense" | "withdrawal" | "add_float" | "add_cash"
     description: Optional[str] = None
     amount: Decimal
     created_at: datetime
