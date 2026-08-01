@@ -136,8 +136,11 @@ def get_contacts_with_positions(
     Return ALL tracked accounts grouped into contacts (the shape the Accounts
     screen renders). Backend owns the grouping + KPI totals — the UI is thin.
 
-    Grouping: accounts sharing a person_id collapse into one contact; accounts
-    without a person collapse by normalized name (the standalone fallback).
+    Grouping: accounts sharing a person_id collapse into one contact; standalone
+    accounts (no person) collapse by EXACT name (case-sensitive — "Amar" and
+    "amar" are distinct accounts). A tracked + held pair with the same name
+    merges into one dual-position contact. A same-position collision is never
+    silently dropped: the second account gets its own contact.
     Positions are never netted.
     """
     business = _get_business_or_raise(db, current_user.id)
@@ -150,9 +153,19 @@ def get_contacts_with_positions(
         if account.person_id is not None:
             key = f"person_{account.person_id}"
         else:
-            key = f"name_{account.name.strip().lower()}"
+            key = f"name_{account.name.strip()}"
+
+        position_field = (
+            "tracked_position"
+            if account.position_type == "tracked"
+            else "held_position"
+        )
 
         contact = contacts.get(key)
+        if contact is not None and contact[position_field] is not None:
+            key = f"{key}#{account.id}"
+            contact = None
+
         if contact is None:
             contact = {
                 "person_id": account.person_id,
@@ -164,16 +177,12 @@ def get_contacts_with_positions(
             contacts[key] = contact
             order.append(key)
 
-        summary = ContactPositionSummary(
+        contact[position_field] = ContactPositionSummary(
             account_id=account.id,
             balance=tracked_account_repository.get_balance(
                 db, business.id, account.id
             ),
         )
-        if account.position_type == "tracked":
-            contact["tracked_position"] = summary
-        else:
-            contact["held_position"] = summary
 
     items = [ContactWithPositions(**contacts[key]) for key in order]
 

@@ -498,3 +498,73 @@ def test_contacts_endpoint_empty_business(client, auth_headers):
     assert data["totals"]["held_count"] == 0
 
 
+def test_contacts_endpoint_keeps_case_distinct_names(client, auth_headers):
+    """'Amar' and 'amar' are distinct accounts and must NOT be merged."""
+    _complete_onboarding(client, auth_headers, cash=100000.0, float_bal=100000.0)
+
+    amar_caps = client.post(
+        "/api/v1/tracked-accounts/",
+        headers=auth_headers,
+        json={"name": "Amar", "account_type": "person"},
+    ).json()
+    amar_lower = client.post(
+        "/api/v1/tracked-accounts/",
+        headers=auth_headers,
+        json={"name": "amar", "account_type": "person"},
+    ).json()
+
+    # Same name + same position collision must never be silently dropped
+    zeinab_a = client.post(
+        "/api/v1/tracked-accounts/",
+        headers=auth_headers,
+        json={"name": "zeinab", "position_type": "tracked"},
+    ).json()
+    zeinab_b = client.post(
+        "/api/v1/tracked-accounts/",
+        headers=auth_headers,
+        json={"name": "zeinab", "position_type": "tracked"},
+    ).json()
+
+    # Same name tracked + held pair merges into one dual-position contact
+    nahid_tracked = client.post(
+        "/api/v1/tracked-accounts/",
+        headers=auth_headers,
+        json={"name": "nahid", "position_type": "tracked"},
+    ).json()
+    nahid_held = client.post(
+        "/api/v1/tracked-accounts/",
+        headers=auth_headers,
+        json={"name": "nahid", "position_type": "held"},
+    ).json()
+
+    res = client.get("/api/v1/tracked-accounts/contacts", headers=auth_headers)
+    assert res.status_code == 200
+    data = res.json()
+
+    # Both 'Amar' accounts present as separate contacts
+    names = [c["name"] for c in data["items"]]
+    assert names.count("Amar") == 1
+    assert names.count("amar") == 1
+
+    by_name = {}
+    for c in data["items"]:
+        by_name.setdefault(c["name"], []).append(c)
+
+    amar_caps_item = by_name["Amar"][0]
+    amar_lower_item = by_name["amar"][0]
+    assert amar_caps_item["tracked_position"]["account_id"] == amar_caps["id"]
+    assert amar_lower_item["tracked_position"]["account_id"] == amar_lower["id"]
+
+    # Both 'zeinab' tracked accounts present (no silent drop)
+    zeinab_items = by_name["zeinab"]
+    assert len(zeinab_items) == 2
+    zeinab_ids = {c["tracked_position"]["account_id"] for c in zeinab_items}
+    assert zeinab_ids == {zeinab_a["id"], zeinab_b["id"]}
+
+    # 'nahid' tracked+held merged into one dual-position contact
+    assert len(by_name["nahid"]) == 1
+    nahid = by_name["nahid"][0]
+    assert nahid["tracked_position"]["account_id"] == nahid_tracked["id"]
+    assert nahid["held_position"]["account_id"] == nahid_held["id"]
+
+
