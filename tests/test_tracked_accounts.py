@@ -409,3 +409,92 @@ def test_person_id_transfer_auto_creation_and_routing(client, auth_headers):
     assert float(person_detail2["money_held"]["balance"]) == 7500.0
 
 
+def test_contacts_endpoint_groups_positions_and_totals(client, auth_headers):
+    """The /tracked-accounts/contacts endpoint owns grouping + KPI totals for the UI."""
+    _complete_onboarding(client, auth_headers, cash=100000.0, float_bal=100000.0)
+
+    # Person-backed contact with BOTH positions
+    p_res = client.post(
+        "/api/v1/people/",
+        headers=auth_headers,
+        json={"name": "Amar", "type": "customer"},
+    ).json()
+    person_id = p_res["id"]
+
+    tracked_acct = client.post(
+        "/api/v1/tracked-accounts/",
+        headers=auth_headers,
+        json={"name": "Amar", "position_type": "tracked", "person_id": person_id},
+    ).json()
+    held_acct = client.post(
+        "/api/v1/tracked-accounts/",
+        headers=auth_headers,
+        json={"name": "Amar", "position_type": "held", "person_id": person_id},
+    ).json()
+
+    # Standalone account (no Person record) must still appear
+    standalone_acct = client.post(
+        "/api/v1/tracked-accounts/",
+        headers=auth_headers,
+        json={"name": "Supplier ABC", "account_type": "business"},
+    ).json()
+
+    # Build balances: give 25,000 to tracked, receive 10,000 into held, give 5,000 to standalone
+    client.post(
+        "/api/v1/tracked-accounts/give",
+        headers=auth_headers,
+        json={"source_type": "cash", "tracked_account_id": tracked_acct["id"], "amount": 25000.0},
+    )
+    client.post(
+        "/api/v1/tracked-accounts/receive",
+        headers=auth_headers,
+        json={"destination_type": "cash", "tracked_account_id": held_acct["id"], "amount": 10000.0},
+    )
+    client.post(
+        "/api/v1/tracked-accounts/give",
+        headers=auth_headers,
+        json={"source_type": "cash", "tracked_account_id": standalone_acct["id"], "amount": 5000.0},
+    )
+
+    res = client.get("/api/v1/tracked-accounts/contacts", headers=auth_headers)
+    assert res.status_code == 200
+    data = res.json()
+
+    assert data["total"] == 2
+    by_name = {c["name"]: c for c in data["items"]}
+
+    amar = by_name["Amar"]
+    assert amar["person_id"] == person_id
+    assert amar["tracked_position"]["account_id"] == tracked_acct["id"]
+    assert float(amar["tracked_position"]["balance"]) == 25000.0
+    assert amar["held_position"]["account_id"] == held_acct["id"]
+    assert float(amar["held_position"]["balance"]) == 10000.0
+
+    supplier = by_name["Supplier ABC"]
+    assert supplier["person_id"] is None
+    assert float(supplier["tracked_position"]["balance"]) == 5000.0
+    assert supplier["held_position"] is None
+
+    # KPI totals are backend-derived (no client-side folding)
+    totals = data["totals"]
+    assert float(totals["tracked_total"]) == 30000.0
+    assert float(totals["held_total"]) == 10000.0
+    assert totals["tracked_count"] == 2
+    assert totals["held_count"] == 1
+
+
+def test_contacts_endpoint_empty_business(client, auth_headers):
+    """No accounts -> empty items and zeroed totals (still 200, no crash)."""
+    _complete_onboarding(client, auth_headers)
+
+    res = client.get("/api/v1/tracked-accounts/contacts", headers=auth_headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total"] == 0
+    assert data["items"] == []
+    assert float(data["totals"]["tracked_total"]) == 0.0
+    assert float(data["totals"]["held_total"]) == 0.0
+    assert data["totals"]["tracked_count"] == 0
+    assert data["totals"]["held_count"] == 0
+
+

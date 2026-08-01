@@ -24,6 +24,7 @@ from app.core.exceptions import (
 )
 from app.models.user import User
 from app.schemas.tracked_account import (
+    ContactWithPositionsList,
     GetMoneyBackRequest,
     GiveMoneyRequest,
     ReceiveMoneyRequest,
@@ -70,6 +71,18 @@ def list_tracked_accounts(
     db: Session = Depends(get_db),
 ):
     return tracked_account_service.get_all_accounts(db, current_user)
+
+
+@router.get(
+    "/contacts",
+    response_model=ContactWithPositionsList,
+    summary="List all contacts grouped with their Money I Track and Money Held positions",
+)
+def list_contacts_with_positions(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return tracked_account_service.get_contacts_with_positions(db, current_user)
 
 
 # ---------------------------------------------------------------------------

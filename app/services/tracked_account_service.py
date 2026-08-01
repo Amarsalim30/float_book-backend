@@ -31,6 +31,10 @@ from app.repositories import (
     tracked_account_repository,
 )
 from app.schemas.tracked_account import (
+    ContactPositionSummary,
+    ContactTotals,
+    ContactWithPositions,
+    ContactWithPositionsList,
     GetMoneyBackRequest,
     GiveMoneyRequest,
     LedgerHistoryEntry,
@@ -122,6 +126,79 @@ def get_all_accounts(
     ]
 
     return TrackedAccountList(items=items, total=len(items))
+
+
+def get_contacts_with_positions(
+    db: Session,
+    current_user,
+) -> ContactWithPositionsList:
+    """
+    Return ALL tracked accounts grouped into contacts (the shape the Accounts
+    screen renders). Backend owns the grouping + KPI totals — the UI is thin.
+
+    Grouping: accounts sharing a person_id collapse into one contact; accounts
+    without a person collapse by normalized name (the standalone fallback).
+    Positions are never netted.
+    """
+    business = _get_business_or_raise(db, current_user.id)
+    accounts = tracked_account_repository.get_all(db, business.id)
+
+    contacts: dict[str, dict] = {}
+    order: list[str] = []
+
+    for account in accounts:
+        if account.person_id is not None:
+            key = f"person_{account.person_id}"
+        else:
+            key = f"name_{account.name.strip().lower()}"
+
+        contact = contacts.get(key)
+        if contact is None:
+            contact = {
+                "person_id": account.person_id,
+                "name": account.name,
+                "phone": account.phone,
+                "tracked_position": None,
+                "held_position": None,
+            }
+            contacts[key] = contact
+            order.append(key)
+
+        summary = ContactPositionSummary(
+            account_id=account.id,
+            balance=tracked_account_repository.get_balance(
+                db, business.id, account.id
+            ),
+        )
+        if account.position_type == "tracked":
+            contact["tracked_position"] = summary
+        else:
+            contact["held_position"] = summary
+
+    items = [ContactWithPositions(**contacts[key]) for key in order]
+
+    tracked_total = Decimal("0.00")
+    held_total = Decimal("0.00")
+    tracked_count = 0
+    held_count = 0
+    for contact in items:
+        if contact.tracked_position is not None:
+            tracked_total += contact.tracked_position.balance
+            tracked_count += 1
+        if contact.held_position is not None:
+            held_total += contact.held_position.balance
+            held_count += 1
+
+    return ContactWithPositionsList(
+        items=items,
+        total=len(items),
+        totals=ContactTotals(
+            tracked_total=tracked_total,
+            held_total=held_total,
+            tracked_count=tracked_count,
+            held_count=held_count,
+        ),
+    )
 
 
 def get_account_detail(

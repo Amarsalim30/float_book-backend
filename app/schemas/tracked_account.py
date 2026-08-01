@@ -171,3 +171,33 @@ class TransferResponse(BaseModel):
     tracked_account_name: str
     note: Optional[str] = None
 
+
+# ---------------------------------------------------------------------------
+# Contacts-with-positions (backend-derived grouping, thin UI)
+# ---------------------------------------------------------------------------
+
+class ContactPositionSummary(BaseModel):
+    account_id: int
+    balance: Decimal = Decimal("0.00")
+
+
+class ContactWithPositions(BaseModel):
+    person_id: Optional[int] = None
+    name: str
+    phone: Optional[str] = None
+    tracked_position: Optional[ContactPositionSummary] = None  # Money I Track
+    held_position: Optional[ContactPositionSummary] = None     # Money Held
+
+
+class ContactTotals(BaseModel):
+    tracked_total: Decimal = Decimal("0.00")
+    held_total: Decimal = Decimal("0.00")
+    tracked_count: int = 0
+    held_count: int = 0
+
+
+class ContactWithPositionsList(BaseModel):
+    items: List[ContactWithPositions]
+    total: int
+    totals: ContactTotals
+
