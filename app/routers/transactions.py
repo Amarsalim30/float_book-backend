@@ -1,9 +1,15 @@
-from fastapi import APIRouter, Depends, status
+from datetime import datetime
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
-from app.schemas.transaction import TransactionCreate, TransactionList, TransactionResponse
+from app.schemas.transaction import (
+    TransactionCreate,
+    TransactionDetailResponse,
+    TransactionList,
+    TransactionResponse,
+)
 from app.services import transaction_service
 
 router = APIRouter(prefix="/transactions", tags=["Transactions"])
@@ -20,16 +26,30 @@ def create_transaction(
 
 @router.get("/", response_model=TransactionList)
 def get_transactions(
-    page: int = 1,
-    limit: int = 20,
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
     type: str | None = None,
+    q: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    sort: str = "desc",
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    return transaction_service.get_all(db, current_user, page=page, limit=limit, type=type)
+    return transaction_service.get_all(
+        db,
+        current_user,
+        page=page,
+        limit=limit,
+        type=type,
+        q=q,
+        date_from=date_from,
+        date_to=date_to,
+        sort=sort,
+    )
 
 
-@router.get("/{id}", response_model=TransactionResponse)
+@router.get("/{id}", response_model=TransactionDetailResponse)
 def get_transaction(
     id: int,
     current_user: User = Depends(get_current_user),

@@ -3,6 +3,15 @@ from decimal import Decimal
 from typing import List, Optional
 from pydantic import BaseModel, field_validator
 
+from app.schemas.enums import (
+    AccountType,
+    LedgerEntryType,
+    MpesaDirection,
+    PaymentMethod,
+    TransactionSource,
+    TransactionType,
+)
+
 
 class TransactionCreate(BaseModel):
     type: str  # sale | expense | withdrawal | add_float | add_cash | transfer | repayment | payment
@@ -47,27 +56,59 @@ class TransactionCreate(BaseModel):
         return v
 
 
-class LedgerEffectResponse(BaseModel):
-    account_type: str  # "cash" | "float"
-    direction: str  # "credit" | "debit"
+class PersonSummary(BaseModel):
+    id: int
+    name: str
+    phone_number: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class MpesaMessageSummary(BaseModel):
+    id: int
+    reference: str
+    name: Optional[str] = None
+    phone: Optional[str] = None
     amount: Decimal
+    direction: MpesaDirection
+    timestamp: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class LedgerEffectResponse(BaseModel):
+    account_type: AccountType
+    direction: LedgerEntryType
+    amount: Decimal
+
+    model_config = {"from_attributes": True}
 
 
 class TransactionResponse(BaseModel):
     id: int
-    type: str
+    type: TransactionType
+    source: TransactionSource = TransactionSource.MANUAL
     amount: Decimal
     amount_received: Optional[Decimal] = None
     change_amount: Optional[Decimal] = None
-    payment_method: Optional[str] = None
+    payment_method: Optional[PaymentMethod] = None
     mpesa_message_id: Optional[int] = None
     description: Optional[str] = None
     reference: Optional[str] = None
     person_id: Optional[int] = None
     created_at: datetime
+    person: Optional[PersonSummary] = None
+    mpesa_message: Optional[MpesaMessageSummary] = None
+    has_notes: bool = False
+    has_attachment: bool = False
     effects: List[LedgerEffectResponse] = []
+    ledger_effects: List[LedgerEffectResponse] = []
 
     model_config = {"from_attributes": True}
+
+
+class TransactionDetailResponse(TransactionResponse):
+    raw_sms_text: Optional[str] = None
 
 
 class TransactionList(BaseModel):
@@ -75,3 +116,6 @@ class TransactionList(BaseModel):
     total: int
     page: int
     limit: int
+    total_pages: int = 1
+    has_next: bool = False
+    has_previous: bool = False

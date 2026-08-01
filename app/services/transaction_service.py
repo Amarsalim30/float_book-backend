@@ -7,11 +7,17 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
+from datetime import datetime
 from app.models.user import User
+from app.models.transaction import Transaction
 from app.repositories import business_repository, ledger_repository, mpesa_repository, transaction_repository
+from app.schemas.enums import TransactionSource
 from app.schemas.transaction import (
     LedgerEffectResponse,
+    MpesaMessageSummary,
+    PersonSummary,
     TransactionCreate,
+    TransactionDetailResponse,
     TransactionList,
     TransactionResponse,
 )
@@ -172,29 +178,7 @@ def create(db: Session, current_user: User, request: TransactionCreate) -> Trans
         db.commit()
         db.refresh(transaction)
 
-        effects_response = [
-            LedgerEffectResponse(
-                account_type=le.account_type,
-                direction=le.entry_type,
-                amount=le.amount,
-            )
-            for le in transaction.ledger_entries
-        ]
-
-        return TransactionResponse(
-            id=transaction.id,
-            type=transaction.type,
-            amount=transaction.amount,
-            amount_received=transaction.amount_received,
-            change_amount=transaction.change_amount,
-            payment_method=transaction.payment_method,
-            mpesa_message_id=request.mpesa_message_id,
-            description=transaction.description,
-            reference=transaction.reference,
-            person_id=transaction.person_id,
-            created_at=transaction.created_at,
-            effects=effects_response,
-        )
+        return _map_transaction_response(transaction)
 
     except HTTPException:
         db.rollback()
@@ -213,55 +197,121 @@ def create(db: Session, current_user: User, request: TransactionCreate) -> Trans
         ) from exc
 
 
+def _map_transaction_response(tx: Transaction) -> TransactionResponse:
+    person_summary = (
+        PersonSummary(
+            id=tx.person.id,
+            name=tx.person.name,
+            phone_number=tx.person.phone,
+        )
+        if tx.person
+        else None
+    )
+
+    mpesa_summary = (
+        MpesaMessageSummary(
+            id=tx.mpesa_message.id,
+            reference=tx.mpesa_message.reference,
+            name=tx.mpesa_message.sender,
+            phone=None,
+            amount=tx.mpesa_message.amount,
+            direction=tx.mpesa_message.direction,
+            timestamp=tx.mpesa_message.message_timestamp,
+        )
+        if tx.mpesa_message
+        else None
+    )
+
+    source = (
+        TransactionSource.IMPORTED_MPESA
+        if tx.mpesa_message
+        else TransactionSource.MANUAL
+    )
+
+    has_notes = bool(tx.description and tx.description.strip())
+    has_attachment = bool(tx.mpesa_message)
+
+    effects_list = [
+        LedgerEffectResponse(
+            account_type=le.account_type,
+            direction=le.entry_type,
+            amount=le.amount,
+        )
+        for le in tx.ledger_entries
+    ]
+
+    return TransactionResponse(
+        id=tx.id,
+        type=tx.type,
+        source=source,
+        amount=tx.amount,
+        amount_received=tx.amount_received,
+        change_amount=tx.change_amount,
+        payment_method=tx.payment_method,
+        mpesa_message_id=tx.mpesa_message.id if tx.mpesa_message else None,
+        description=tx.description,
+        reference=tx.reference,
+        person_id=tx.person_id,
+        created_at=tx.created_at,
+        person=person_summary,
+        mpesa_message=mpesa_summary,
+        has_notes=has_notes,
+        has_attachment=has_attachment,
+        effects=effects_list,
+        ledger_effects=effects_list,
+    )
+
+
 def get_all(
     db: Session,
     current_user: User,
     page: int = 1,
     limit: int = 20,
     type: str | None = None,
+    q: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    sort: str = "desc",
 ) -> TransactionList:
     business = business_repository.get_by_owner(db, current_user.id)
     if not business:
-        return TransactionList(items=[], total=0, page=page, limit=limit)
+        return TransactionList(
+            items=[],
+            total=0,
+            page=page,
+            limit=limit,
+            total_pages=0,
+            has_next=False,
+            has_previous=False,
+        )
 
     items, total = transaction_repository.get_all(
-        db, business_id=business.id, page=page, limit=limit, type=type
+        db,
+        business_id=business.id,
+        page=page,
+        limit=limit,
+        type=type,
+        q=q,
+        date_from=date_from,
+        date_to=date_to,
+        sort=sort,
     )
 
-    response_items = [
-        TransactionResponse(
-            id=tx.id,
-            type=tx.type,
-            amount=tx.amount,
-            amount_received=tx.amount_received,
-            change_amount=tx.change_amount,
-            payment_method=tx.payment_method,
-            mpesa_message_id=tx.mpesa_message.id if tx.mpesa_message else None,
-            description=tx.description,
-            reference=tx.reference,
-            person_id=tx.person_id,
-            created_at=tx.created_at,
-            effects=[
-                LedgerEffectResponse(
-                    account_type=le.account_type,
-                    direction=le.entry_type,
-                    amount=le.amount,
-                )
-                for le in tx.ledger_entries
-            ],
-        )
-        for tx in items
-    ]
+    response_items = [_map_transaction_response(tx) for tx in items]
+    total_pages = (total + limit - 1) // limit if limit > 0 else 1
 
     return TransactionList(
         items=response_items,
         total=total,
         page=page,
         limit=limit,
+        total_pages=total_pages,
+        has_next=page < total_pages,
+        has_previous=page > 1,
     )
 
 
-def get_by_id(db: Session, current_user: User, transaction_id: int) -> TransactionResponse:
+def get_by_id(db: Session, current_user: User, transaction_id: int) -> TransactionDetailResponse:
     business = business_repository.get_by_owner(db, current_user.id)
     if not business:
         raise HTTPException(
@@ -276,24 +326,11 @@ def get_by_id(db: Session, current_user: User, transaction_id: int) -> Transacti
             detail="Transaction not found",
         )
 
-    return TransactionResponse(
-        id=tx.id,
-        type=tx.type,
-        amount=tx.amount,
-        amount_received=tx.amount_received,
-        change_amount=tx.change_amount,
-        payment_method=tx.payment_method,
-        mpesa_message_id=tx.mpesa_message.id if tx.mpesa_message else None,
-        description=tx.description,
-        reference=tx.reference,
-        person_id=tx.person_id,
-        created_at=tx.created_at,
-        effects=[
-            LedgerEffectResponse(
-                account_type=le.account_type,
-                direction=le.entry_type,
-                amount=le.amount,
-            )
-            for le in tx.ledger_entries
-        ],
+    base_resp = _map_transaction_response(tx)
+    raw_sms = tx.mpesa_message.raw_text if tx.mpesa_message else None
+
+    return TransactionDetailResponse(
+        **base_resp.model_dump(),
+        raw_sms_text=raw_sms,
     )
+
