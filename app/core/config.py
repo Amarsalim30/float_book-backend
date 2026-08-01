@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     JWT_SECRET_KEY: str = "your-secret-key-change-in-production"
     JWT_ALGORITHM: str = "HS256"
-    JWT_EXPIRATION_MINUTES: int = 60
+    JWT_EXPIRATION_MINUTES: int = 60 * 24 * 30  # 30 days expiration
 
     model_config = SettingsConfigDict(
         env_file=".env",
