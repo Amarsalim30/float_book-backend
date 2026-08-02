@@ -5,9 +5,10 @@ from pydantic import BaseModel
 
 
 class LedgerEffect(BaseModel):
-    account_type: str  # "cash" | "float"
+    account_type: str  # "cash" | "float" | "tracked"
     direction: str  # "credit" | "debit"
     amount: Decimal
+    tracked_account_name: Optional[str] = None
 
 
 class ActivityItem(BaseModel):

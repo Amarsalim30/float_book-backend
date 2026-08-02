@@ -80,6 +80,7 @@ class LedgerEffectResponse(BaseModel):
     account_type: AccountType
     direction: LedgerEntryType
     amount: Decimal
+    tracked_account_name: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

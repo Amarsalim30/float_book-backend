@@ -236,6 +236,9 @@ def _map_transaction_response(tx: Transaction) -> TransactionResponse:
             account_type=le.account_type,
             direction=le.entry_type,
             amount=le.amount,
+            tracked_account_name=(
+                le.tracked_account.name if le.tracked_account else None
+            ),
         )
         for le in tx.ledger_entries
     ]
