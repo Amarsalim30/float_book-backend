@@ -409,6 +409,45 @@ def test_person_id_transfer_auto_creation_and_routing(client, auth_headers):
     assert float(person_detail2["money_held"]["balance"]) == 7500.0
 
 
+def test_give_money_via_held_account_reuses_standalone_tracked_position(
+    client, auth_headers
+):
+    """A held account can create, then repeatedly resolve, its tracked counterpart."""
+    _complete_onboarding(client, auth_headers, cash=10000.0, float_bal=0.0)
+
+    held = client.post(
+        "/api/v1/tracked-accounts/",
+        headers=auth_headers,
+        json={"name": "Amar", "position_type": "held"},
+    ).json()
+
+    for _ in range(2):
+        response = client.post(
+            "/api/v1/tracked-accounts/give",
+            headers=auth_headers,
+            json={
+                "source_type": "cash",
+                "tracked_account_id": held["id"],
+                "amount": 1000.0,
+            },
+        )
+        assert response.status_code == 201, response.json()
+
+    contacts = client.get(
+        "/api/v1/tracked-accounts/contacts", headers=auth_headers
+    ).json()
+    assert contacts["total"] == 1
+    amar = contacts["items"][0]
+    assert amar["held_position"]["account_id"] == held["id"]
+    assert amar["tracked_position"] is not None
+
+    tracked_id = amar["tracked_position"]["account_id"]
+    tracked = client.get(
+        f"/api/v1/tracked-accounts/{tracked_id}", headers=auth_headers
+    ).json()
+    assert float(tracked["balance"]) == 2000.0
+
+
 def test_contacts_endpoint_groups_positions_and_totals(client, auth_headers):
     """The /tracked-accounts/contacts endpoint owns grouping + KPI totals for the UI."""
     _complete_onboarding(client, auth_headers, cash=100000.0, float_bal=100000.0)
@@ -498,8 +537,8 @@ def test_contacts_endpoint_empty_business(client, auth_headers):
     assert data["totals"]["held_count"] == 0
 
 
-def test_contacts_endpoint_keeps_case_distinct_names(client, auth_headers):
-    """'Amar' and 'amar' are distinct accounts and must NOT be merged."""
+def test_create_account_is_idempotent_by_normalized_name_and_position(client, auth_headers):
+    """Standalone accounts deduplicate by business, position, and normalized name."""
     _complete_onboarding(client, auth_headers, cash=100000.0, float_bal=100000.0)
 
     amar_caps = client.post(
@@ -513,7 +552,7 @@ def test_contacts_endpoint_keeps_case_distinct_names(client, auth_headers):
         json={"name": "amar", "account_type": "person"},
     ).json()
 
-    # Same name + same position collision must never be silently dropped
+    # Same name + same position resolves to the existing account.
     zeinab_a = client.post(
         "/api/v1/tracked-accounts/",
         headers=auth_headers,
@@ -541,30 +580,29 @@ def test_contacts_endpoint_keeps_case_distinct_names(client, auth_headers):
     assert res.status_code == 200
     data = res.json()
 
-    # Both 'Amar' accounts present as separate contacts
+    assert amar_caps["id"] == amar_lower["id"]
+    assert zeinab_a["id"] == zeinab_b["id"]
+
+    # Case variants resolve to the original display name and account.
     names = [c["name"] for c in data["items"]]
     assert names.count("Amar") == 1
-    assert names.count("amar") == 1
+    assert "amar" not in names
 
     by_name = {}
     for c in data["items"]:
         by_name.setdefault(c["name"], []).append(c)
 
     amar_caps_item = by_name["Amar"][0]
-    amar_lower_item = by_name["amar"][0]
     assert amar_caps_item["tracked_position"]["account_id"] == amar_caps["id"]
-    assert amar_lower_item["tracked_position"]["account_id"] == amar_lower["id"]
 
-    # Both 'zeinab' tracked accounts present (no silent drop)
+    # There is one normalized-name tracked position for zeinab.
     zeinab_items = by_name["zeinab"]
-    assert len(zeinab_items) == 2
+    assert len(zeinab_items) == 1
     zeinab_ids = {c["tracked_position"]["account_id"] for c in zeinab_items}
-    assert zeinab_ids == {zeinab_a["id"], zeinab_b["id"]}
+    assert zeinab_ids == {zeinab_a["id"]}
 
     # 'nahid' tracked+held merged into one dual-position contact
     assert len(by_name["nahid"]) == 1
     nahid = by_name["nahid"][0]
     assert nahid["tracked_position"]["account_id"] == nahid_tracked["id"]
     assert nahid["held_position"]["account_id"] == nahid_held["id"]
-
-

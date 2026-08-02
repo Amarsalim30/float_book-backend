@@ -69,6 +69,23 @@ def create_account(
     business = _get_business_or_raise(db, current_user.id)
 
     try:
+        account = tracked_account_repository.get_by_normalized_name_and_position(
+            db, business.id, request.name, request.position_type
+        )
+        if account is not None:
+            balance = tracked_account_repository.get_balance(db, business.id, account.id)
+            return TrackedAccountResponse(
+                id=account.id,
+                name=account.name,
+                account_type=account.account_type,
+                position_type=account.position_type,
+                person_id=account.person_id,
+                phone=account.phone,
+                notes=account.notes,
+                balance=balance,
+                created_at=account.created_at,
+            )
+
         data = {
             "business_id": business.id,
             "name": request.name,
@@ -295,6 +312,10 @@ def resolve_position(
             elif account.person_id is not None:
                 return tracked_account_repository.get_by_person_and_position(
                     db, business_id, account.person_id, position_type
+                )
+            else:
+                return tracked_account_repository.get_by_normalized_name_and_position(
+                    db, business_id, account.name, position_type
                 )
     return None
 

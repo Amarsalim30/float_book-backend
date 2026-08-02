@@ -43,6 +43,22 @@ def get_by_person_and_position(
     )
 
 
+def get_by_normalized_name_and_position(
+    db: Session, business_id: int, name: str, position_type: str
+) -> TrackedAccount | None:
+    """Find an account by its case- and whitespace-normalized display name."""
+    normalized_name = name.strip().lower()
+    return (
+        db.query(TrackedAccount)
+        .filter(
+            TrackedAccount.business_id == business_id,
+            TrackedAccount.position_type == position_type,
+            func.lower(func.trim(TrackedAccount.name)) == normalized_name,
+        )
+        .first()
+    )
+
+
 
 def get_all(db: Session, business_id: int) -> list[TrackedAccount]:
     return (
@@ -110,4 +126,3 @@ def get_all_ledger_history_asc(
         .order_by(LedgerEntry.created_at.asc(), LedgerEntry.id.asc())
         .all()
     )
-
