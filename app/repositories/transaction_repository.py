@@ -96,7 +96,7 @@ def get_today_by_business(
             Transaction.created_at >= day_start,
             Transaction.created_at <= day_end,
         )
-        .order_by(Transaction.created_at.desc())
+        .order_by(Transaction.created_at.desc(), Transaction.id.desc())
         .limit(limit)
         .all()
     )

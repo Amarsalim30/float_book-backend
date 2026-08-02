@@ -78,6 +78,13 @@ def test_give_money_and_get_money_back_flow(client, auth_headers):
     dash = client.get("/api/v1/dashboard/", headers=auth_headers).json()
     assert float(dash["float_balance"]) == 25000.0
 
+    # Today's activity shows a single transfer TO the account (money out)
+    give_activity = dash["today_activity"][0]
+    assert give_activity["type"] == "transfer"
+    assert give_activity["direction"] == "out"
+    assert give_activity["counterparty_name"] == "Supplier ABC"
+    assert float(give_activity["amount"]) == 25000.0
+
     # 2. Get Money Back: Supplier ABC -> Float (10,000)
     get_res = client.post(
         "/api/v1/tracked-accounts/get-back",
@@ -112,6 +119,13 @@ def test_give_money_and_get_money_back_flow(client, auth_headers):
     # Verify Float balance recovered to 35,000 (25,000 + 10,000)
     dash2 = client.get("/api/v1/dashboard/", headers=auth_headers).json()
     assert float(dash2["float_balance"]) == 35000.0
+
+    # Today's activity now shows a single transfer FROM the account (money in)
+    get_back_activity = dash2["today_activity"][0]
+    assert get_back_activity["type"] == "transfer"
+    assert get_back_activity["direction"] == "in"
+    assert get_back_activity["counterparty_name"] == "Supplier ABC"
+    assert float(get_back_activity["amount"]) == 10000.0
 
 
 
@@ -239,6 +253,13 @@ def test_receive_and_return_money_flow(client, auth_headers):
     dash = client.get("/api/v1/dashboard/", headers=auth_headers).json()
     assert float(dash["cash_balance"]) == 20000.0
 
+    # Today's activity shows a single transfer FROM the contact (money in, held)
+    rec_activity = dash["today_activity"][0]
+    assert rec_activity["type"] == "transfer"
+    assert rec_activity["direction"] == "in"
+    assert rec_activity["counterparty_name"] == "Amar Deposit"
+    assert float(rec_activity["amount"]) == 10000.0
+
     # 2. Return Money: Cash -> Amar (4,000)
     ret_res = client.post(
         "/api/v1/tracked-accounts/return",
@@ -261,6 +282,13 @@ def test_receive_and_return_money_flow(client, auth_headers):
     # Dashboard cash balance decreased to 16,000 (20,000 - 4,000)
     dash2 = client.get("/api/v1/dashboard/", headers=auth_headers).json()
     assert float(dash2["cash_balance"]) == 16000.0
+
+    # Today's activity now shows a single transfer TO the contact (money out, held)
+    ret_activity = dash2["today_activity"][0]
+    assert ret_activity["type"] == "transfer"
+    assert ret_activity["direction"] == "out"
+    assert ret_activity["counterparty_name"] == "Amar Deposit"
+    assert float(ret_activity["amount"]) == 4000.0
 
 
 def test_critical_no_netting_positions(client, auth_headers):

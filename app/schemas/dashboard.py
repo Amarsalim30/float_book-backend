@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Literal, Optional
 from pydantic import BaseModel
 
 
@@ -18,6 +18,13 @@ class ActivityItem(BaseModel):
     amount: Decimal
     created_at: datetime
     effects: List[LedgerEffect]
+
+    # Display helpers computed by the backend so the UI stays thin.
+    # "in" = money entering operational accounts, "out" = money leaving them.
+    direction: Literal["in", "out"] = "in"
+
+    # The other party to a transfer (tracked account name); else person name if any.
+    counterparty_name: Optional[str] = None
 
 
 class DashboardResponse(BaseModel):
