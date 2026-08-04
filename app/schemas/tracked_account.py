@@ -75,6 +75,7 @@ class GiveMoneyRequest(BaseModel):
     tracked_account_id: Optional[int] = None
     amount: Decimal
     note: Optional[str] = None
+    mpesa_message_id: Optional[int] = None
 
     @field_validator("amount")
     @classmethod
@@ -99,6 +100,7 @@ class GetMoneyBackRequest(BaseModel):
     tracked_account_id: Optional[int] = None
     amount: Decimal
     note: Optional[str] = None
+    mpesa_message_id: Optional[int] = None
 
     @field_validator("amount")
     @classmethod
@@ -123,6 +125,7 @@ class ReceiveMoneyRequest(BaseModel):
     tracked_account_id: Optional[int] = None
     amount: Decimal
     note: Optional[str] = None
+    mpesa_message_id: Optional[int] = None
 
     @field_validator("amount")
     @classmethod
@@ -147,6 +150,7 @@ class ReturnMoneyRequest(BaseModel):
     tracked_account_id: Optional[int] = None
     amount: Decimal
     note: Optional[str] = None
+    mpesa_message_id: Optional[int] = None
 
     @field_validator("amount")
     @classmethod

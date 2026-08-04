@@ -27,6 +27,7 @@ from app.models.transaction import Transaction
 from app.repositories import (
     business_repository,
     ledger_repository,
+    mpesa_repository,
     person_repository,
     tracked_account_repository,
 )
@@ -367,6 +368,32 @@ def create_position_if_missing(
     return account
 
 
+def _link_mpesa_message(
+    db: Session,
+    business,
+    mpesa_message_id: int | None,
+    transaction: Transaction,
+) -> None:
+    """Validate and link an M-Pesa SMS to a transfer transaction, if provided."""
+    if mpesa_message_id is None:
+        return
+    mpesa_msg = mpesa_repository.get_by_id(db, mpesa_message_id)
+    if not mpesa_msg or mpesa_msg.business_id != business.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="M-Pesa message not found for business",
+        )
+    # Direction is not enforced server-side: the picker defaults to the
+    # expected direction per transfer type but lets the user switch, so any
+    # unused Take/Give SMS may be attached to any transfer.
+    if mpesa_msg.transaction_id is not None and mpesa_msg.transaction_id != transaction.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="SMS is already linked to another transaction",
+        )
+    mpesa_msg.transaction_id = transaction.id
+
+
 
 def give_money(
     db: Session,
@@ -438,6 +465,8 @@ def give_money(
                 created_by=current_user.id,
             )
         )
+
+        _link_mpesa_message(db, business, request.mpesa_message_id, txn)
 
         db.commit()
 
@@ -524,6 +553,8 @@ def get_money_back(
             )
         )
 
+        _link_mpesa_message(db, business, request.mpesa_message_id, txn)
+
         db.commit()
 
         return TransferResponse(
@@ -601,6 +632,8 @@ def receive_money(
                 created_by=current_user.id,
             )
         )
+
+        _link_mpesa_message(db, business, request.mpesa_message_id, txn)
 
         db.commit()
 
@@ -698,6 +731,8 @@ def return_money(
                 created_by=current_user.id,
             )
         )
+
+        _link_mpesa_message(db, business, request.mpesa_message_id, txn)
 
         db.commit()
 
