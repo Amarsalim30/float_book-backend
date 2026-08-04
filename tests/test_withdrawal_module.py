@@ -61,7 +61,7 @@ def test_withdrawal_ledger_effects(client, auth_headers):
 
 
 def test_withdrawal_with_sms(client, auth_headers):
-    """Withdrawal linking an incoming M-Pesa SMS proof."""
+    """Withdrawal linking a Give (MONEY_SENT) M-Pesa SMS proof."""
     _complete_onboarding(client, auth_headers)
 
     # Ingest SMS of 5000
@@ -72,8 +72,8 @@ def test_withdrawal_with_sms(client, auth_headers):
             "reference": "WDR12345",
             "sender": "John Doe",
             "amount": 5000.0,
-            "direction": "MONEY_RECEIVED",
-            "raw_text": "Received KSh5,000 from John Doe WDR12345",
+            "direction": "MONEY_SENT",
+            "raw_text": "Give Ksh5,000.00 cash to John Doe New M-PESA balance is Ksh20,000.00.",
             "message_timestamp": datetime.now(timezone.utc).isoformat(),
         },
     )

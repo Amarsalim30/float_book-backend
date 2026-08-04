@@ -26,6 +26,10 @@ def create_message(
         "message_timestamp": request.message_timestamp,
     }
 
+    existing = mpesa_repository.get_by_reference(db, business.id, request.reference)
+    if existing:
+        return MpesaMessageResponse.model_validate(existing)
+
     try:
         message = mpesa_repository.create(db, message_data)
         db.commit()
@@ -50,11 +54,15 @@ def get_recent_messages(
     if not business:
         return []
 
-    if direction == "MONEY_RECEIVED" and unused:
-        messages = mpesa_repository.get_recent_unused_incoming(
-            db, business_id=business.id, limit=limit
+    if direction not in ("MONEY_RECEIVED", "MONEY_SENT"):
+        return []
+
+    messages = (
+        mpesa_repository.get_recent_unused(
+            db, business_id=business.id, direction=direction, limit=limit
         )
-    else:
-        messages = []
+        if unused
+        else []
+    )
 
     return [MpesaMessageResponse.model_validate(msg) for msg in messages]
