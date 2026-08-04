@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 from datetime import datetime
 from app.models.user import User
 from app.models.transaction import Transaction
+from app.models.ledger_entry import LedgerEntry
 from app.repositories import business_repository, ledger_repository, mpesa_repository, transaction_repository
 from app.schemas.enums import TransactionSource
 from app.schemas.transaction import (
@@ -30,15 +31,10 @@ class EffectSpec:
     amount: Decimal
 
 
-def create(db: Session, current_user: User, request: TransactionCreate) -> TransactionResponse:
-    business = business_repository.get_by_owner(db, current_user.id)
-    if not business:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Business not found for user. Complete onboarding first.",
-        )
-
-    # Normalize payment method or account type for all transaction types
+def _compute_effects(
+    request: TransactionCreate,
+) -> tuple[str | None, Decimal, Decimal, Decimal, list[EffectSpec]]:
+    """Normalize payment method and compute the ledger effect specs for a request."""
     raw_pm = (request.payment_method or request.account_type or "").lower()
     if raw_pm in ("mpesa", "float"):
         payment_method = "mpesa"
@@ -67,9 +63,7 @@ def create(db: Session, current_user: User, request: TransactionCreate) -> Trans
             )
 
         amount_received = (
-            request.amount_received
-            if request.amount_received is not None
-            else sale_amount
+            request.amount_received if request.amount_received is not None else sale_amount
         )
 
         if amount_received < sale_amount:
@@ -99,10 +93,10 @@ def create(db: Session, current_user: User, request: TransactionCreate) -> Trans
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="payment_method must be 'cash' or 'mpesa' for an expense",
             )
-        # Map payment method to the ledger account that gets debited:
-        # cash -> cash debit, mpesa -> float debit
         ledger_account = "cash" if payment_method == "cash" else "float"
-        effects_spec = [EffectSpec(account_type=ledger_account, direction="debit", amount=request.amount)]
+        effects_spec = [
+            EffectSpec(account_type=ledger_account, direction="debit", amount=request.amount)
+        ]
 
     elif request.type == "withdrawal":
         effects_spec = [
@@ -125,6 +119,50 @@ def create(db: Session, current_user: User, request: TransactionCreate) -> Trans
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Transaction type '{request.type}' is not yet supported",
         )
+
+    return payment_method, sale_amount, amount_received, change_amount, effects_spec
+
+
+def _link_mpesa_message(
+    db: Session,
+    business,
+    request: TransactionCreate,
+    transaction: Transaction,
+) -> None:
+    """Validate and link an M-Pesa SMS to a transaction, if one was provided."""
+    if request.mpesa_message_id is None:
+        return
+    mpesa_msg = mpesa_repository.get_by_id(db, request.mpesa_message_id)
+    if not mpesa_msg or mpesa_msg.business_id != business.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="M-Pesa message not found for business",
+        )
+    if request.type == "sale" and mpesa_msg.direction != "MONEY_RECEIVED":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only MONEY_RECEIVED SMS can be attached to a sale",
+        )
+    if mpesa_msg.transaction_id is not None and mpesa_msg.transaction_id != transaction.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="SMS is already linked to another transaction",
+        )
+    mpesa_msg.transaction_id = transaction.id
+
+
+def create(db: Session, current_user: User, request: TransactionCreate) -> TransactionResponse:
+    business = business_repository.get_by_owner(db, current_user.id)
+    if not business:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Business not found for user. Complete onboarding first.",
+        )
+
+    # Normalize payment method and compute ledger effects
+    payment_method, sale_amount, amount_received, change_amount, effects_spec = (
+        _compute_effects(request)
+    )
 
     # Atomic DB Transaction Block
     try:
@@ -156,24 +194,7 @@ def create(db: Session, current_user: User, request: TransactionCreate) -> Trans
             )
 
         # Link MpesaMessage if provided (for sale, withdrawal, or expense)
-        if request.mpesa_message_id is not None:
-            mpesa_msg = mpesa_repository.get_by_id(db, request.mpesa_message_id)
-            if not mpesa_msg or mpesa_msg.business_id != business.id:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="M-Pesa message not found for business",
-                )
-            if request.type == "sale" and mpesa_msg.direction != "MONEY_RECEIVED":
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Only MONEY_RECEIVED SMS can be attached to a sale",
-                )
-            if mpesa_msg.transaction_id is not None:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="SMS is already linked to another transaction",
-                )
-            mpesa_msg.transaction_id = transaction.id
+        _link_mpesa_message(db, business, request, transaction)
 
         db.commit()
         db.refresh(transaction)
@@ -194,6 +215,127 @@ def create(db: Session, current_user: User, request: TransactionCreate) -> Trans
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to record transaction: {exc}",
+        ) from exc
+
+
+def update(
+    db: Session,
+    current_user: User,
+    transaction_id: int,
+    request: TransactionCreate,
+) -> TransactionResponse:
+    business = business_repository.get_by_owner(db, current_user.id)
+    if not business:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Business not found for user. Complete onboarding first.",
+        )
+
+    tx = transaction_repository.get_by_id(db, transaction_id)
+    if not tx or tx.business_id != business.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Transaction not found",
+        )
+
+    payment_method, sale_amount, amount_received, change_amount, effects_spec = (
+        _compute_effects(request)
+    )
+
+    try:
+        # Unlink a previously-attached SMS if we're switching to none or a different one
+        if tx.mpesa_message and (
+            request.mpesa_message_id is None
+            or tx.mpesa_message.id != request.mpesa_message_id
+        ):
+            tx.mpesa_message.transaction_id = None
+
+        # Replace the ledger effects (balances are derived from entries, so this reverses the old ones)
+        db.query(LedgerEntry).filter(LedgerEntry.transaction_id == tx.id).delete(
+            synchronize_session=False
+        )
+
+        tx.type = request.type
+        tx.amount = sale_amount
+        tx.amount_received = amount_received if request.type == "sale" else None
+        tx.change_amount = change_amount if request.type == "sale" else Decimal("0.00")
+        tx.payment_method = payment_method if request.type in ("sale", "expense") else None
+        tx.description = request.description
+
+        for spec in effects_spec:
+            ledger_repository.create_entry(
+                db=db,
+                business_id=business.id,
+                account_type=spec.account_type,
+                entry_type=spec.direction,
+                amount=spec.amount,
+                created_by=current_user.id,
+                description=request.description or f"{request.type.replace('_', ' ').title()} entry",
+                transaction_id=tx.id,
+            )
+
+        _link_mpesa_message(db, business, request, tx)
+
+        db.commit()
+        db.refresh(tx)
+
+        return _map_transaction_response(tx)
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        logger.error(
+            "Transaction update failed for user_id=%s transaction_id=%s: %s",
+            current_user.id,
+            transaction_id,
+            exc,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update transaction: {exc}",
+        ) from exc
+
+
+def delete(db: Session, current_user: User, transaction_id: int) -> None:
+    business = business_repository.get_by_owner(db, current_user.id)
+    if not business:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Business not found for user. Complete onboarding first.",
+        )
+
+    tx = transaction_repository.get_by_id(db, transaction_id)
+    if not tx or tx.business_id != business.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Transaction not found",
+        )
+
+    try:
+        if tx.mpesa_message:
+            tx.mpesa_message.transaction_id = None
+
+        db.query(LedgerEntry).filter(LedgerEntry.transaction_id == tx.id).delete(
+            synchronize_session=False
+        )
+        db.delete(tx)
+        db.commit()
+
+    except Exception as exc:
+        db.rollback()
+        logger.error(
+            "Transaction delete failed for user_id=%s transaction_id=%s: %s",
+            current_user.id,
+            transaction_id,
+            exc,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete transaction: {exc}",
         ) from exc
 
 

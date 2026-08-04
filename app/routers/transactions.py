@@ -56,3 +56,23 @@ def get_transaction(
     db: Session = Depends(get_db),
 ):
     return transaction_service.get_by_id(db, current_user, id)
+
+
+@router.put("/{id}", response_model=TransactionResponse)
+def update_transaction(
+    id: int,
+    request: TransactionCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return transaction_service.update(db, current_user, id, request)
+
+
+@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_transaction(
+    id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    transaction_service.delete(db, current_user, id)
+    return None
