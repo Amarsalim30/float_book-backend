@@ -138,19 +138,9 @@ def _link_mpesa_message(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="M-Pesa message not found for business",
         )
-    # Money into the float/drawer is proven by a "Take" (MONEY_RECEIVED) SMS;
-    # money out of the float is proven by a "Give" (MONEY_SENT) SMS.
-    expected_direction = {
-        "sale": "MONEY_RECEIVED",
-        "add_float": "MONEY_RECEIVED",
-        "withdrawal": "MONEY_SENT",
-        "expense": "MONEY_SENT",
-    }.get(request.type)
-    if expected_direction is not None and mpesa_msg.direction != expected_direction:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Only {expected_direction} SMS can be attached to a {request.type}",
-        )
+    # Direction is not enforced server-side: the picker defaults to the
+    # expected direction per transaction type but lets the user switch,
+    # so any unused Take/Give SMS may be attached to any transaction type.
     if mpesa_msg.transaction_id is not None and mpesa_msg.transaction_id != transaction.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

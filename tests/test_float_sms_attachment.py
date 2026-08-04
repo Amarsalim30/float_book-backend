@@ -47,7 +47,7 @@ def test_unused_messages_list_by_direction(client, auth_headers):
     assert all(m["direction"] == "MONEY_RECEIVED" for m in res.json())
 
 
-def test_withdrawal_requires_give_sms(client, auth_headers):
+def test_any_direction_can_attach_to_any_type(client, auth_headers):
     _complete_onboarding(client, auth_headers)
     give_id = _ingest(client, auth_headers, "GIVE456", "MONEY_SENT")
     take_id = _ingest(client, auth_headers, "TAKE789", "MONEY_RECEIVED")
@@ -61,17 +61,17 @@ def test_withdrawal_requires_give_sms(client, auth_headers):
     assert res.status_code in (200, 201), res.json()
     assert res.json()["mpesa_message_id"] == give_id
 
-    # Take (MONEY_RECEIVED) is rejected for a withdrawal.
+    # The picker toggle lets a user back a withdrawal with a Take SMS too.
     res = client.post(
         "/api/v1/transactions/",
         headers=auth_headers,
         json={"type": "withdrawal", "amount": 5000.0, "mpesa_message_id": take_id},
     )
-    assert res.status_code == 400, res.json()
-    assert "MONEY_SENT" in res.json()["detail"]
+    assert res.status_code in (200, 201), res.json()
+    assert res.json()["mpesa_message_id"] == take_id
 
 
-def test_add_float_requires_take_sms(client, auth_headers):
+def test_add_float_accepts_any_direction(client, auth_headers):
     _complete_onboarding(client, auth_headers)
     give_id = _ingest(client, auth_headers, "GIVE456", "MONEY_SENT")
     take_id = _ingest(client, auth_headers, "TAKE789", "MONEY_RECEIVED")
@@ -85,11 +85,11 @@ def test_add_float_requires_take_sms(client, auth_headers):
     assert res.status_code in (200, 201), res.json()
     assert res.json()["mpesa_message_id"] == take_id
 
-    # Give (MONEY_SENT) is rejected for an add_float deposit.
+    # Give (MONEY_SENT) is also accepted for an add_float deposit.
     res = client.post(
         "/api/v1/transactions/",
         headers=auth_headers,
         json={"type": "add_float", "amount": 5000.0, "mpesa_message_id": give_id},
     )
-    assert res.status_code == 400, res.json()
-    assert "MONEY_RECEIVED" in res.json()["detail"]
+    assert res.status_code in (200, 201), res.json()
+    assert res.json()["mpesa_message_id"] == give_id
