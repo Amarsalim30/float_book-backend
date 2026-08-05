@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from sqlalchemy import or_, cast, String
 from sqlalchemy.orm import Session
@@ -86,8 +86,15 @@ def get_today_by_business(
 ) -> list[Transaction]:
     """Return today's transactions for the business based on Nairobi timezone."""
     now_nairobi = datetime.now(NAIROBI_TZ)
-    day_start = now_nairobi.replace(hour=0, minute=0, second=0, microsecond=0)
-    day_end = now_nairobi.replace(hour=23, minute=59, second=59, microsecond=999999)
+    day_start_nairobi = now_nairobi.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end_nairobi = now_nairobi.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+    # created_at is stored in UTC (func.now()), so the Nairobi "today" window
+    # must be converted to UTC before comparison. Comparing Nairobi-aware
+    # bounds against UTC values breaks string-based comparisons in SQLite and
+    # silently shifts the window by the UTC+3 offset.
+    day_start = day_start_nairobi.astimezone(timezone.utc)
+    day_end = day_end_nairobi.astimezone(timezone.utc)
 
     return (
         db.query(Transaction)

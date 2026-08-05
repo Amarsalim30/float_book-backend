@@ -4,7 +4,7 @@ Ledger repository — all DB access for the LedgerEntry model.
 Balances are ALWAYS derived from ledger sums, never from a stored running
 total.  This is the architectural rule: the ledger is the source of truth.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Literal
 from zoneinfo import ZoneInfo
@@ -112,7 +112,11 @@ def get_ledger_statement(
     )
 
     now_nairobi = datetime.now(NAIROBI_TZ)
-    day_start = now_nairobi.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_start_nairobi = now_nairobi.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # created_at is stored in UTC; normalize to UTC (SQLite returns naive UTC,
+    # Postgres returns tz-aware UTC) so "today" membership is correct.
+    day_start = day_start_nairobi.astimezone(timezone.utc)
 
     running_bal = Decimal("0.00")
     total_credits = Decimal("0.00")
@@ -128,7 +132,7 @@ def get_ledger_statement(
 
         created_dt = entry.created_at
         if created_dt and created_dt.tzinfo is None:
-            created_dt = created_dt.replace(tzinfo=NAIROBI_TZ)
+            created_dt = created_dt.replace(tzinfo=timezone.utc)
 
         if entry.entry_type in ("seed", "credit"):
             running_bal += amt
