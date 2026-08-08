@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     VERSION: str = "0.1.0"
     API_PREFIX: str = "/api/v1"
 
-    DATABASE_URL: str = "postgresql+psycopg://postgres:SOHCAHTOA1967@localhost:5432/float_book"
+    DATABASE_URL: str = "sqlite:///./fpesa.db"
 
     JWT_SECRET_KEY: str = "your-secret-key-change-in-production"
     JWT_ALGORITHM: str = "HS256"
