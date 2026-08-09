@@ -495,12 +495,14 @@ def get_money_back(
     """
     business = _get_business_or_raise(db, current_user.id)
 
-    account = resolve_position(
-        db, business.id, request.person_id, request.tracked_account_id, "tracked"
+    account = create_position_if_missing(
+        db,
+        business.id,
+        request.person_id,
+        request.tracked_account_id,
+        "tracked",
+        current_user.id,
     )
-    if not account:
-        target_id = request.tracked_account_id or request.person_id or 0
-        raise TrackedAccountOwnershipError(target_id)
 
     # Validate TrackedAccount has enough balance (V1: never allow negative)
     tracked_balance = tracked_account_repository.get_balance(
@@ -664,12 +666,14 @@ def return_money(
     """
     business = _get_business_or_raise(db, current_user.id)
 
-    account = resolve_position(
-        db, business.id, request.person_id, request.tracked_account_id, "held"
+    account = create_position_if_missing(
+        db,
+        business.id,
+        request.person_id,
+        request.tracked_account_id,
+        "held",
+        current_user.id,
     )
-    if not account:
-        target_id = request.tracked_account_id or request.person_id or 0
-        raise TrackedAccountOwnershipError(target_id)
 
     # Validate source operational Cash/Float balance
     source_balance = ledger_repository.get_balance(db, business.id, request.source_type)

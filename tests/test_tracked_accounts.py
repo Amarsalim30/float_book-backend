@@ -476,6 +476,89 @@ def test_give_money_via_held_account_reuses_standalone_tracked_position(
     assert float(tracked["balance"]) == 2000.0
 
 
+def test_get_back_and_return_by_person_id_resolve_twin_positions(client, auth_headers):
+    """Person_id routing works for every direction, resolving each twin position."""
+    _complete_onboarding(client, auth_headers, cash=50000.0, float_bal=50000.0)
+
+    p_res = client.post(
+        "/api/v1/people/",
+        headers=auth_headers,
+        json={"name": "Sarah Contact", "phone": "0700111222", "type": "customer"},
+    ).json()
+    person_id = p_res["id"]
+
+    # 1. Give Money by person_id -> auto-creates tracked position (12,000)
+    give_res = client.post(
+        "/api/v1/tracked-accounts/give",
+        headers=auth_headers,
+        json={"person_id": person_id, "source_type": "cash", "amount": 12000.0},
+    )
+    assert give_res.status_code == 201, give_res.json()
+
+    # 2. Get Money Back by person_id -> reuses tracked position (12,000 - 4,000)
+    gb_res = client.post(
+        "/api/v1/tracked-accounts/get-back",
+        headers=auth_headers,
+        json={"person_id": person_id, "destination_type": "cash", "amount": 4000.0},
+    )
+    assert gb_res.status_code == 201, gb_res.json()
+
+    detail = client.get(f"/api/v1/people/{person_id}", headers=auth_headers).json()
+    assert float(detail["money_i_track"]["balance"]) == 8000.0
+
+    # 3. Receive Money by person_id -> auto-creates held position (7,500)
+    rec_res = client.post(
+        "/api/v1/tracked-accounts/receive",
+        headers=auth_headers,
+        json={"person_id": person_id, "destination_type": "cash", "amount": 7500.0},
+    )
+    assert rec_res.status_code == 201, rec_res.json()
+
+    # 4. Return Money by person_id -> reuses held position (7,500 - 2,500)
+    ret_res = client.post(
+        "/api/v1/tracked-accounts/return",
+        headers=auth_headers,
+        json={"person_id": person_id, "source_type": "cash", "amount": 2500.0},
+    )
+    assert ret_res.status_code == 201, ret_res.json()
+
+    detail2 = client.get(f"/api/v1/people/{person_id}", headers=auth_headers).json()
+    assert float(detail2["money_i_track"]["balance"]) == 8000.0
+    assert float(detail2["money_held"]["balance"]) == 5000.0
+
+
+def test_get_back_and_return_auto_create_missing_position_then_reject(
+    client, auth_headers
+):
+    """Missing twin positions auto-create instead of 404, then reject on zero balance."""
+    _complete_onboarding(client, auth_headers, cash=50000.0, float_bal=50000.0)
+
+    p_res = client.post(
+        "/api/v1/people/",
+        headers=auth_headers,
+        json={"name": "Sarah Contact", "phone": "0700111222", "type": "customer"},
+    ).json()
+    person_id = p_res["id"]
+
+    # Get Money Back with no tracked position yet -> auto-creates, zero-balance reject
+    gb_res = client.post(
+        "/api/v1/tracked-accounts/get-back",
+        headers=auth_headers,
+        json={"person_id": person_id, "destination_type": "cash", "amount": 1000.0},
+    )
+    assert gb_res.status_code == 400, gb_res.json()
+    assert gb_res.json()["detail"]["error"] == "insufficient_tracked_balance"
+
+    # Return Money with no held position yet -> auto-creates, zero-balance reject
+    ret_res = client.post(
+        "/api/v1/tracked-accounts/return",
+        headers=auth_headers,
+        json={"person_id": person_id, "source_type": "cash", "amount": 1000.0},
+    )
+    assert ret_res.status_code == 400, ret_res.json()
+    assert ret_res.json()["detail"]["error"] == "insufficient_tracked_balance"
+
+
 def test_contacts_endpoint_groups_positions_and_totals(client, auth_headers):
     """The /tracked-accounts/contacts endpoint owns grouping + KPI totals for the UI."""
     _complete_onboarding(client, auth_headers, cash=100000.0, float_bal=100000.0)
