@@ -216,3 +216,137 @@ def test_update_mpesa_sale_removing_sms_unlinks_and_freees_it(client, auth_heade
     )
     assert list_res.status_code == 200
     assert any(m["id"] == sms_id for m in list_res.json())
+
+
+def _ingest_sms(client, auth_headers, reference, amount, sender="Customer"):
+    from datetime import datetime, timezone
+
+    sms_res = client.post(
+        "/api/v1/mpesa/messages",
+        headers=auth_headers,
+        json={
+            "reference": reference,
+            "sender": sender,
+            "amount": amount,
+            "direction": "MONEY_RECEIVED",
+            "raw_text": f"Received KSh{amount} from {sender} {reference}",
+            "message_timestamp": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+    assert sms_res.status_code == 201, sms_res.json()
+    return sms_res.json()["id"]
+
+
+def _unused_sms_ids(client, auth_headers):
+    res = client.get(
+        "/api/v1/mpesa/messages?direction=MONEY_RECEIVED&unused=true", headers=auth_headers
+    )
+    assert res.status_code == 200
+    return [m["id"] for m in res.json()]
+
+
+def test_update_mpesa_sale_batch_relink(client, auth_headers):
+    _complete_onboarding(client, auth_headers)
+    id_a = _ingest_sms(client, auth_headers, "BLINK_A", 200.0)
+    id_b = _ingest_sms(client, auth_headers, "BLINK_B", 300.0)
+    id_c = _ingest_sms(client, auth_headers, "BLINK_C", 100.0)
+
+    res = client.post(
+        "/api/v1/transactions/",
+        headers=auth_headers,
+        json={
+            "type": "sale",
+            "amount": 500.0,
+            "payment_method": "mpesa",
+            "mpesa_message_ids": [id_a, id_b],
+        },
+    )
+    assert res.status_code in (200, 201), res.json()
+    tx_id = res.json()["id"]
+    assert _float_balance(client, auth_headers) == Decimal("50500.00")
+
+    # Swap B for C: A stays linked, B is freed, C is linked
+    res = client.put(
+        f"/api/v1/transactions/{tx_id}",
+        headers=auth_headers,
+        json={
+            "type": "sale",
+            "amount": 600.0,
+            "amount_received": 600.0,
+            "payment_method": "mpesa",
+            "mpesa_message_ids": [id_a, id_c],
+        },
+    )
+    assert res.status_code == 200, res.json()
+    data = res.json()
+    assert [m["id"] for m in data["mpesa_messages"]] == [id_a, id_c]
+    assert _float_balance(client, auth_headers) == Decimal("50600.00")
+
+    unused = _unused_sms_ids(client, auth_headers)
+    assert id_b in unused
+    assert id_a not in unused
+    assert id_c not in unused
+
+
+def test_update_mpesa_sale_batch_clear_all(client, auth_headers):
+    _complete_onboarding(client, auth_headers)
+    id_a = _ingest_sms(client, auth_headers, "BCLEAR_A", 200.0)
+    id_b = _ingest_sms(client, auth_headers, "BCLEAR_B", 300.0)
+
+    res = client.post(
+        "/api/v1/transactions/",
+        headers=auth_headers,
+        json={
+            "type": "sale",
+            "amount": 500.0,
+            "payment_method": "mpesa",
+            "mpesa_message_ids": [id_a, id_b],
+        },
+    )
+    assert res.status_code in (200, 201), res.json()
+    tx_id = res.json()["id"]
+
+    res = client.put(
+        f"/api/v1/transactions/{tx_id}",
+        headers=auth_headers,
+        json={
+            "type": "sale",
+            "amount": 500.0,
+            "payment_method": "mpesa",
+            "mpesa_message_ids": [],
+        },
+    )
+    assert res.status_code == 200, res.json()
+    data = res.json()
+    assert data["mpesa_message_id"] is None
+    assert data["mpesa_messages"] == []
+
+    unused = _unused_sms_ids(client, auth_headers)
+    assert id_a in unused and id_b in unused
+
+
+def test_delete_mpesa_sale_batch_unlinks_all(client, auth_headers):
+    _complete_onboarding(client, auth_headers)
+    id_a = _ingest_sms(client, auth_headers, "BDEL_A", 200.0)
+    id_b = _ingest_sms(client, auth_headers, "BDEL_B", 300.0)
+
+    res = client.post(
+        "/api/v1/transactions/",
+        headers=auth_headers,
+        json={
+            "type": "sale",
+            "amount": 500.0,
+            "payment_method": "mpesa",
+            "mpesa_message_ids": [id_a, id_b],
+        },
+    )
+    assert res.status_code in (200, 201), res.json()
+    tx_id = res.json()["id"]
+    assert _float_balance(client, auth_headers) == Decimal("50500.00")
+
+    res = client.delete(f"/api/v1/transactions/{tx_id}", headers=auth_headers)
+    assert res.status_code == 204, res.json()
+    assert _float_balance(client, auth_headers) == Decimal("50000.00")
+
+    unused = _unused_sms_ids(client, auth_headers)
+    assert id_a in unused and id_b in unused

@@ -19,4 +19,4 @@ class MpesaMessage(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     business = relationship("Business", back_populates="mpesa_messages")
-    transaction = relationship("Transaction", back_populates="mpesa_message")
+    transaction = relationship("Transaction", back_populates="mpesa_messages")

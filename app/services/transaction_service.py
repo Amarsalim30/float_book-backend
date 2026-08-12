@@ -11,6 +11,7 @@ from datetime import datetime
 from app.models.user import User
 from app.models.transaction import Transaction
 from app.models.ledger_entry import LedgerEntry
+from app.models.mpesa_message import MpesaMessage
 from app.repositories import business_repository, ledger_repository, mpesa_repository, transaction_repository
 from app.schemas.enums import TransactionSource
 from app.schemas.transaction import (
@@ -56,7 +57,9 @@ def _compute_effects(
                 detail="payment_method must be 'cash' or 'mpesa' for a sale",
             )
 
-        if payment_method == "cash" and request.mpesa_message_id is not None:
+        if payment_method == "cash" and (
+            request.mpesa_message_id is not None or request.mpesa_message_ids
+        ):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="M-Pesa SMS cannot be attached to a cash sale",
@@ -123,30 +126,40 @@ def _compute_effects(
     return payment_method, sale_amount, amount_received, change_amount, effects_spec
 
 
-def _link_mpesa_message(
+def _resolve_mpesa_message_ids(request: TransactionCreate) -> list[int] | None:
+    """Resolve the requested SMS ids, preferring the batch list over the single id."""
+    if request.mpesa_message_ids:
+        return list(request.mpesa_message_ids)
+    if request.mpesa_message_id is not None:
+        return [request.mpesa_message_id]
+    return None
+
+
+def _link_mpesa_messages(
     db: Session,
     business,
-    request: TransactionCreate,
+    message_ids: list[int] | None,
     transaction: Transaction,
 ) -> None:
-    """Validate and link an M-Pesa SMS to a transaction, if one was provided."""
-    if request.mpesa_message_id is None:
+    """Validate and link M-Pesa SMS proofs to a transaction."""
+    if not message_ids:
         return
-    mpesa_msg = mpesa_repository.get_by_id(db, request.mpesa_message_id)
-    if not mpesa_msg or mpesa_msg.business_id != business.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="M-Pesa message not found for business",
-        )
-    # Direction is not enforced server-side: the picker defaults to the
-    # expected direction per transaction type but lets the user switch,
-    # so any unused Take/Give SMS may be attached to any transaction type.
-    if mpesa_msg.transaction_id is not None and mpesa_msg.transaction_id != transaction.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="SMS is already linked to another transaction",
-        )
-    mpesa_msg.transaction_id = transaction.id
+    for message_id in message_ids:
+        mpesa_msg = mpesa_repository.get_by_id(db, message_id)
+        if not mpesa_msg or mpesa_msg.business_id != business.id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="M-Pesa message not found for business",
+            )
+        # Direction is not enforced server-side: the picker defaults to the
+        # expected direction per transaction type but lets the user switch,
+        # so any unused Take/Give SMS may be attached to any transaction type.
+        if mpesa_msg.transaction_id is not None and mpesa_msg.transaction_id != transaction.id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="SMS is already linked to another transaction",
+            )
+        mpesa_msg.transaction_id = transaction.id
 
 
 def create(db: Session, current_user: User, request: TransactionCreate) -> TransactionResponse:
@@ -192,7 +205,9 @@ def create(db: Session, current_user: User, request: TransactionCreate) -> Trans
             )
 
         # Link MpesaMessage if provided (for sale, withdrawal, or expense)
-        _link_mpesa_message(db, business, request, transaction)
+        _link_mpesa_messages(
+            db, business, _resolve_mpesa_message_ids(request), transaction
+        )
 
         db.commit()
         db.refresh(transaction)
@@ -241,12 +256,11 @@ def update(
     )
 
     try:
-        # Unlink a previously-attached SMS if we're switching to none or a different one
-        if tx.mpesa_message and (
-            request.mpesa_message_id is None
-            or tx.mpesa_message.id != request.mpesa_message_id
-        ):
-            tx.mpesa_message.transaction_id = None
+        new_message_ids = set(_resolve_mpesa_message_ids(request) or [])
+        # Unlink a previously-attached SMS if it's no longer in the new set
+        for msg in tx.mpesa_messages:
+            if msg.id not in new_message_ids:
+                msg.transaction_id = None
 
         # Replace the ledger effects (balances are derived from entries, so this reverses the old ones)
         db.query(LedgerEntry).filter(LedgerEntry.transaction_id == tx.id).delete(
@@ -272,7 +286,9 @@ def update(
                 transaction_id=tx.id,
             )
 
-        _link_mpesa_message(db, business, request, tx)
+        _link_mpesa_messages(
+            db, business, _resolve_mpesa_message_ids(request), tx
+        )
 
         db.commit()
         db.refresh(tx)
@@ -313,8 +329,8 @@ def delete(db: Session, current_user: User, transaction_id: int) -> None:
         )
 
     try:
-        if tx.mpesa_message:
-            tx.mpesa_message.transaction_id = None
+        for msg in tx.mpesa_messages:
+            msg.transaction_id = None
 
         db.query(LedgerEntry).filter(LedgerEntry.transaction_id == tx.id).delete(
             synchronize_session=False
@@ -337,6 +353,18 @@ def delete(db: Session, current_user: User, transaction_id: int) -> None:
         ) from exc
 
 
+def _map_mpesa_summary(msg: MpesaMessage) -> MpesaMessageSummary:
+    return MpesaMessageSummary(
+        id=msg.id,
+        reference=msg.reference,
+        name=msg.sender,
+        phone=None,
+        amount=msg.amount,
+        direction=msg.direction,
+        timestamp=msg.message_timestamp,
+    )
+
+
 def _map_transaction_response(tx: Transaction) -> TransactionResponse:
     person_summary = (
         PersonSummary(
@@ -348,28 +376,20 @@ def _map_transaction_response(tx: Transaction) -> TransactionResponse:
         else None
     )
 
-    mpesa_summary = (
-        MpesaMessageSummary(
-            id=tx.mpesa_message.id,
-            reference=tx.mpesa_message.reference,
-            name=tx.mpesa_message.sender,
-            phone=None,
-            amount=tx.mpesa_message.amount,
-            direction=tx.mpesa_message.direction,
-            timestamp=tx.mpesa_message.message_timestamp,
-        )
-        if tx.mpesa_message
-        else None
-    )
+    mpesa_messages = [
+        _map_mpesa_summary(msg)
+        for msg in sorted(tx.mpesa_messages, key=lambda m: m.message_timestamp)
+    ]
+    mpesa_summary = mpesa_messages[0] if mpesa_messages else None
 
     source = (
         TransactionSource.IMPORTED_MPESA
-        if tx.mpesa_message
+        if mpesa_messages
         else TransactionSource.MANUAL
     )
 
     has_notes = bool(tx.description and tx.description.strip())
-    has_attachment = bool(tx.mpesa_message)
+    has_attachment = bool(mpesa_messages)
 
     effects_list = [
         LedgerEffectResponse(
@@ -391,13 +411,14 @@ def _map_transaction_response(tx: Transaction) -> TransactionResponse:
         amount_received=tx.amount_received,
         change_amount=tx.change_amount,
         payment_method=tx.payment_method,
-        mpesa_message_id=tx.mpesa_message.id if tx.mpesa_message else None,
+        mpesa_message_id=mpesa_summary.id if mpesa_summary else None,
         description=tx.description,
         reference=tx.reference,
         person_id=tx.person_id,
         created_at=tx.created_at,
         person=person_summary,
         mpesa_message=mpesa_summary,
+        mpesa_messages=mpesa_messages,
         has_notes=has_notes,
         has_attachment=has_attachment,
         effects=effects_list,
@@ -471,9 +492,11 @@ def get_by_id(db: Session, current_user: User, transaction_id: int) -> Transacti
 
     base_resp = _map_transaction_response(tx)
     raw_sms = tx.mpesa_message.raw_text if tx.mpesa_message else None
+    raw_sms_texts = [m.raw_text for m in tx.mpesa_messages]
 
     return TransactionDetailResponse(
         **base_resp.model_dump(),
         raw_sms_text=raw_sms,
+        raw_sms_texts=raw_sms_texts,
     )
 

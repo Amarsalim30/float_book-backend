@@ -259,3 +259,137 @@ def test_mpesa_sale_without_sms_succeeds(client, auth_headers):
     assert data["effects"][0]["account_type"] == "float"
     assert data["effects"][0]["direction"] == "credit"
     assert data["effects"][0]["amount"] == "800.00"
+
+
+def _ingest_sms(client, auth_headers, reference, amount, sender="Customer"):
+    res = client.post(
+        "/api/v1/mpesa/messages",
+        headers=auth_headers,
+        json={
+            "reference": reference,
+            "sender": sender,
+            "amount": amount,
+            "direction": "MONEY_RECEIVED",
+            "raw_text": f"Received KSh{amount} from {sender} {reference}",
+            "message_timestamp": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+    assert res.status_code == 201, res.json()
+    return res.json()["id"]
+
+
+def test_mpesa_sale_batch_sms_groups_multiple_proofs(client, auth_headers):
+    _complete_onboarding(client, auth_headers)
+
+    ids = [
+        _ingest_sms(client, auth_headers, "BATCH1", 200.0),
+        _ingest_sms(client, auth_headers, "BATCH2", 300.0),
+        _ingest_sms(client, auth_headers, "BATCH3", 150.0),
+    ]
+
+    res = client.post(
+        "/api/v1/transactions/",
+        headers=auth_headers,
+        json={
+            "type": "sale",
+            "amount": 650.0,
+            "amount_received": 650.0,
+            "payment_method": "mpesa",
+            "mpesa_message_ids": ids,
+        },
+    )
+    assert res.status_code in (200, 201), res.json()
+    data = res.json()
+    assert data["amount"] == "650.00"
+    assert data["amount_received"] == "650.00"
+    assert data["mpesa_message_id"] == ids[0]
+    assert [m["id"] for m in data["mpesa_messages"]] == ids
+    assert len(data["effects"]) == 1
+    assert data["effects"][0]["account_type"] == "float"
+    assert data["effects"][0]["amount"] == "650.00"
+
+    # All batch SMS are now used and no longer returned as unused
+    list_res = client.get(
+        "/api/v1/mpesa/messages?direction=MONEY_RECEIVED&unused=true",
+        headers=auth_headers,
+    )
+    assert list_res.status_code == 200
+    assert all(m["id"] not in ids for m in list_res.json())
+
+
+def test_mpesa_sale_batch_ledger_sums_received(client, auth_headers):
+    _complete_onboarding(client, auth_headers)
+
+    ids = [
+        _ingest_sms(client, auth_headers, "SUM1", 200.0),
+        _ingest_sms(client, auth_headers, "SUM2", 300.0),
+    ]
+
+    res = client.post(
+        "/api/v1/transactions/",
+        headers=auth_headers,
+        json={
+            "type": "sale",
+            "amount": 400.0,
+            "amount_received": 500.0,
+            "payment_method": "mpesa",
+            "mpesa_message_ids": ids,
+        },
+    )
+    assert res.status_code in (200, 201), res.json()
+    data = res.json()
+    assert data["amount_received"] == "500.00"
+    assert data["change_amount"] == "100.00"
+    float_effect = next(e for e in data["effects"] if e["account_type"] == "float")
+    cash_effect = next(e for e in data["effects"] if e["account_type"] == "cash")
+    assert float_effect["amount"] == "500.00"
+    assert cash_effect["direction"] == "debit"
+    assert cash_effect["amount"] == "100.00"
+
+
+def test_mpesa_sale_batch_reuse_rejected(client, auth_headers):
+    _complete_onboarding(client, auth_headers)
+
+    first_id = _ingest_sms(client, auth_headers, "USED1", 200.0)
+    res = client.post(
+        "/api/v1/transactions/",
+        headers=auth_headers,
+        json={
+            "type": "sale",
+            "amount": 200.0,
+            "payment_method": "mpesa",
+            "mpesa_message_id": first_id,
+        },
+    )
+    assert res.status_code in (200, 201), res.json()
+
+    fresh_id = _ingest_sms(client, auth_headers, "FRESH1", 300.0)
+    res2 = client.post(
+        "/api/v1/transactions/",
+        headers=auth_headers,
+        json={
+            "type": "sale",
+            "amount": 500.0,
+            "payment_method": "mpesa",
+            "mpesa_message_ids": [first_id, fresh_id],
+        },
+    )
+    assert res2.status_code == 400
+    assert "SMS is already linked to another transaction" in res2.json()["detail"]
+
+
+def test_cash_sale_with_batch_sms_rejected(client, auth_headers):
+    _complete_onboarding(client, auth_headers)
+
+    res = client.post(
+        "/api/v1/transactions/",
+        headers=auth_headers,
+        json={
+            "type": "sale",
+            "amount": 600.0,
+            "payment_method": "cash",
+            "mpesa_message_ids": [1, 2],
+        },
+    )
+    assert res.status_code == 422
+    assert "M-Pesa SMS cannot be attached to a cash sale" in res.json()["detail"]

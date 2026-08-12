@@ -19,6 +19,7 @@ class TransactionCreate(BaseModel):
     amount_received: Optional[Decimal] = None
     payment_method: Optional[str] = None  # "cash" | "mpesa"
     mpesa_message_id: Optional[int] = None
+    mpesa_message_ids: Optional[List[int]] = None  # batch proofs (sales)
     account_type: Optional[str] = None  # "cash" | "float" for single-leg transactions (non-sales)
     description: Optional[str] = None
     reference: Optional[str] = None
@@ -100,6 +101,7 @@ class TransactionResponse(BaseModel):
     created_at: datetime
     person: Optional[PersonSummary] = None
     mpesa_message: Optional[MpesaMessageSummary] = None
+    mpesa_messages: List[MpesaMessageSummary] = []
     has_notes: bool = False
     has_attachment: bool = False
     effects: List[LedgerEffectResponse] = []
@@ -110,6 +112,7 @@ class TransactionResponse(BaseModel):
 
 class TransactionDetailResponse(TransactionResponse):
     raw_sms_text: Optional[str] = None
+    raw_sms_texts: List[str] = []
 
 
 class TransactionList(BaseModel):

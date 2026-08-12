@@ -24,5 +24,10 @@ class Transaction(Base):
     business = relationship("Business", back_populates="transactions")
     person = relationship("Person", back_populates="transactions")
     ledger_entries = relationship("LedgerEntry", back_populates="transaction")
-    mpesa_message = relationship("MpesaMessage", back_populates="transaction", uselist=False)
+    mpesa_messages = relationship("MpesaMessage", back_populates="transaction")
+
+    @property
+    def mpesa_message(self) -> "MpesaMessage | None":
+        """First attached SMS (backward-compat accessor for single-proof flows)."""
+        return self.mpesa_messages[0] if self.mpesa_messages else None
 
