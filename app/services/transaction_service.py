@@ -256,6 +256,58 @@ def update(
             detail="Transaction not found",
         )
 
+    if tx.type in ("transfer", "repayment", "payment") or request.type in (
+        "transfer",
+        "repayment",
+        "payment",
+    ):
+        try:
+            new_message_ids = set(_resolve_mpesa_message_ids(request) or [])
+            for msg in tx.mpesa_messages:
+                if msg.id not in new_message_ids:
+                    msg.transaction_id = None
+
+            tx.type = request.type
+            tx.amount = request.amount
+            tx.description = request.description
+            if request.created_at is not None:
+                tx.created_at = request.created_at
+
+            for entry in tx.ledger_entries:
+                entry.amount = request.amount
+                entry.description = (
+                    request.description
+                    or f"{request.type.replace('_', ' ').title()} entry"
+                )
+                if request.created_at is not None:
+                    entry.created_at = request.created_at
+
+            _link_mpesa_messages(
+                db, business, _resolve_mpesa_message_ids(request), tx
+            )
+
+            db.commit()
+            db.refresh(tx)
+
+            return _map_transaction_response(tx)
+
+        except HTTPException:
+            db.rollback()
+            raise
+        except Exception as exc:
+            db.rollback()
+            logger.error(
+                "Transaction update failed for user_id=%s transaction_id=%s: %s",
+                current_user.id,
+                transaction_id,
+                exc,
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to update transaction: {exc}",
+            ) from exc
+
     payment_method, sale_amount, amount_received, change_amount, effects_spec = (
         _compute_effects(request)
     )
@@ -278,6 +330,8 @@ def update(
         tx.change_amount = change_amount if request.type == "sale" else Decimal("0.00")
         tx.payment_method = payment_method if request.type in ("sale", "expense") else None
         tx.description = request.description
+        if request.created_at is not None:
+            tx.created_at = request.created_at
 
         for spec in effects_spec:
             ledger_repository.create_entry(
@@ -289,6 +343,7 @@ def update(
                 created_by=current_user.id,
                 description=request.description or f"{request.type.replace('_', ' ').title()} entry",
                 transaction_id=tx.id,
+                created_at=request.created_at,
             )
 
         _link_mpesa_messages(
@@ -297,6 +352,7 @@ def update(
 
         db.commit()
         db.refresh(tx)
+
 
         return _map_transaction_response(tx)
 

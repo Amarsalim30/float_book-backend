@@ -94,9 +94,52 @@ def test_update_invalid_type_rejected(client, auth_headers):
     res = client.put(
         f"/api/v1/transactions/{tx['id']}",
         headers=auth_headers,
-        json={"type": "transfer", "amount": 100.0},
+        json={"type": "invalid_type_xyz", "amount": 100.0},
     )
     assert res.status_code == 422, res.json()
+
+
+def test_update_transfer_transaction(client, auth_headers):
+    _complete_onboarding(client, auth_headers)
+    acct = client.post(
+        "/api/v1/tracked-accounts/",
+        headers=auth_headers,
+        json={"name": "Jane Doe", "account_type": "person"},
+    ).json()
+    acct_id = acct["id"]
+
+    res = client.post(
+        "/api/v1/tracked-accounts/give",
+        headers=auth_headers,
+        json={
+            "tracked_account_id": acct_id,
+            "source_type": "cash",
+            "amount": 2000.0,
+            "note": "Give money to Jane",
+        },
+    )
+    assert res.status_code == 201, res.json()
+    tx_id = res.json()["transaction_id"]
+
+    res = client.put(
+        f"/api/v1/transactions/{tx_id}",
+        headers=auth_headers,
+        json={
+            "type": "transfer",
+            "amount": 3500.0,
+            "description": "Updated give money note",
+        },
+    )
+    assert res.status_code == 200, res.json()
+    data = res.json()
+    assert data["id"] == tx_id
+    assert data["amount"] == "3500.00"
+    assert data["description"] == "Updated give money note"
+    assert len(data["effects"]) == 2
+    assert data["effects"][0]["amount"] == "3500.00"
+    assert data["effects"][1]["amount"] == "3500.00"
+
+
 
 
 def test_delete_reverses_balance(client, auth_headers):
