@@ -20,11 +20,19 @@ def upgrade() -> None:
         sa.text(
             """
             DELETE FROM mpesa_messages
-            WHERE transaction_id IS NULL
-            AND id NOT IN (
-                SELECT MIN(id)
-                FROM mpesa_messages
-                GROUP BY business_id, reference
+            WHERE id IN (
+                SELECT m.id
+                FROM mpesa_messages m
+                WHERE m.transaction_id IS NULL
+                AND EXISTS (
+                    SELECT 1 FROM mpesa_messages m2
+                    WHERE m2.business_id = m.business_id
+                    AND m2.reference = m.reference
+                    AND (
+                        m2.transaction_id IS NOT NULL
+                        OR m2.id < m.id
+                    )
+                )
             )
             """
         )
