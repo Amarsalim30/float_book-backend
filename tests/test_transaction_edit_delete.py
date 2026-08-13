@@ -140,6 +140,45 @@ def test_update_transfer_transaction(client, auth_headers):
     assert data["effects"][1]["amount"] == "3500.00"
 
 
+def test_update_transfer_attaches_mpesa_sms(client, auth_headers):
+    _complete_onboarding(client, auth_headers)
+    acct = client.post(
+        "/api/v1/tracked-accounts/",
+        headers=auth_headers,
+        json={"name": "John Smith", "account_type": "person"},
+    ).json()
+    sms_id = _ingest_mpesa_sms(client, auth_headers, amount=2000.0)
+
+    res = client.post(
+        "/api/v1/tracked-accounts/give",
+        headers=auth_headers,
+        json={
+            "tracked_account_id": acct["id"],
+            "source_type": "cash",
+            "amount": 2000.0,
+            "note": "Initial give without SMS",
+        },
+    )
+    assert res.status_code == 201, res.json()
+    tx_id = res.json()["transaction_id"]
+
+    # Update transfer and attach SMS
+    res = client.put(
+        f"/api/v1/transactions/{tx_id}",
+        headers=auth_headers,
+        json={
+            "type": "transfer",
+            "amount": 2000.0,
+            "description": "Give with SMS attached",
+            "mpesa_message_id": sms_id,
+        },
+    )
+    assert res.status_code == 200, res.json()
+    data = res.json()
+    assert data["mpesa_message_id"] == sms_id
+
+
+
 
 
 def test_delete_reverses_balance(client, auth_headers):
