@@ -62,8 +62,10 @@ def seed(business_id: int) -> None:
         return now - dt.timedelta(hours=h)
 
     # (reference, kind, counterparty, amount, hours_ago, balance_after)
+    # Take = agent takes cash from customer, money leaves the float (MONEY_SENT).
+    # Give = agent gives cash to customer, money enters the float (MONEY_RECEIVED).
     specs = [
-        # Take: money IN to the float (MONEY_RECEIVED)
+        # Take: money OUT of the float (MONEY_SENT)
         ("KQ8XM7VZ2P", "take", "JOHN KAMAU MOMBASA", 13000.00, 3, 122944.99),
         ("M2L5TN9RW4", "take", "AMINAH HASSAN MOMBASA", 7500.00, 8, 115444.99),
         ("X7QK3RDJ6F", "take", "PETER OCHIENG", 2300.00, 14, 107944.99),
@@ -72,7 +74,7 @@ def seed(business_id: int) -> None:
         ("V3R8CY7Q2M", "take", "EMMANUEL OTIENO NAKURU", 12400.00, 40, 59794.99),
         ("J6DX4KA9WP", "take", "FAITH NJERI", 1200.00, 47, 47394.99),
         ("Q9NC2H5Y8B", "take", "MOMBASA WHOLESALERS KENYA", 20000.00, 52, 46194.99),
-        # Give: money OUT of the float (MONEY_SENT)
+        # Give: money INTO the float (MONEY_RECEIVED)
         ("T8KX5R9Z3N", "give", "MALSAT TRADERS LTD JOMOKENYATTA AVENUE Mombasa Cbd", 6500.00, 2, 26194.99),
         ("W2F7MH4QD6", "give", "COAST GENERAL SUPPLIERS MOMBASA", 9800.00, 6, 19694.99),
         ("P5RB3NT8YL", "give", "JAMES MWANGI AGENT OUTLET", 3200.00, 12, 9894.99),
@@ -108,7 +110,7 @@ def seed(business_id: int) -> None:
                     reference=ref,
                     sender=_sender_of(raw_text),
                     amount=amount,
-                    direction="MONEY_RECEIVED" if kind == "take" else "MONEY_SENT",
+                    direction="MONEY_SENT" if kind == "take" else "MONEY_RECEIVED",
                     raw_text=raw_text,
                     message_timestamp=at.astimezone(dt.timezone.utc),
                     transaction_id=None,
