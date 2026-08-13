@@ -5,6 +5,7 @@ class TransactionType(str, Enum):
     SALE = "sale"
     EXPENSE = "expense"
     WITHDRAWAL = "withdrawal"
+    DEPOSIT = "deposit"
     ADD_FLOAT = "add_float"
     ADD_CASH = "add_cash"
     TRANSFER = "transfer"
