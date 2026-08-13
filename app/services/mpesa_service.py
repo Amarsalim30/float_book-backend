@@ -1,4 +1,5 @@
 from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.user import User
@@ -35,6 +36,15 @@ def create_message(
         db.commit()
         db.refresh(message)
         return MpesaMessageResponse.model_validate(message)
+    except IntegrityError:
+        db.rollback()
+        existing = mpesa_repository.get_by_reference(db, business.id, request.reference)
+        if existing:
+            return MpesaMessageResponse.model_validate(existing)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Duplicate M-Pesa reference '{request.reference}'",
+        )
     except Exception as exc:
         db.rollback()
         raise HTTPException(

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, String
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -6,6 +6,9 @@ from app.core.database import Base
 
 class MpesaMessage(Base):
     __tablename__ = "mpesa_messages"
+    __table_args__ = (
+        UniqueConstraint("business_id", "reference", name="uq_mpesa_messages_business_reference"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
