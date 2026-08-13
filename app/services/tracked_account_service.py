@@ -428,43 +428,48 @@ def give_money(
 
     try:
         # Create Transaction record (type="transfer")
-        txn = Transaction(
-            business_id=business.id,
-            type="transfer",
-            amount=request.amount,
-            description=request.note or f"Give money to {account.name}",
-            created_by=current_user.id,
-        )
+        txn_kwargs = {
+            "business_id": business.id,
+            "type": "transfer",
+            "amount": request.amount,
+            "description": request.note or f"Give money to {account.name}",
+            "created_by": current_user.id,
+        }
+        if request.created_at is not None:
+            txn_kwargs["created_at"] = request.created_at
+        txn = Transaction(**txn_kwargs)
         db.add(txn)
         db.flush()
 
         # Debit source (Cash or Float)
-        db.add(
-            LedgerEntry(
-                business_id=business.id,
-                transaction_id=txn.id,
-                account_type=request.source_type,
-                tracked_account_id=None,
-                entry_type="debit",
-                amount=request.amount,
-                description=request.note or f"Give money to {account.name}",
-                created_by=current_user.id,
-            )
-        )
+        entry1_kwargs = {
+            "business_id": business.id,
+            "transaction_id": txn.id,
+            "account_type": request.source_type,
+            "tracked_account_id": None,
+            "entry_type": "debit",
+            "amount": request.amount,
+            "description": request.note or f"Give money to {account.name}",
+            "created_by": current_user.id,
+        }
+        if request.created_at is not None:
+            entry1_kwargs["created_at"] = request.created_at
+        db.add(LedgerEntry(**entry1_kwargs))
 
         # Credit destination (TrackedAccount)
-        db.add(
-            LedgerEntry(
-                business_id=business.id,
-                transaction_id=txn.id,
-                account_type="tracked",
-                tracked_account_id=account.id,
-                entry_type="credit",
-                amount=request.amount,
-                description=request.note or f"Give money to {account.name}",
-                created_by=current_user.id,
-            )
-        )
+        entry2_kwargs = {
+            "business_id": business.id,
+            "transaction_id": txn.id,
+            "account_type": "tracked",
+            "tracked_account_id": account.id,
+            "entry_type": "credit",
+            "amount": request.amount,
+            "description": request.note or f"Give money to {account.name}",
+            "created_by": current_user.id,
+        }
+        if request.created_at is not None:
+            entry2_kwargs["created_at"] = request.created_at
+        db.add(LedgerEntry(**entry2_kwargs))
 
         _link_mpesa_message(db, business, request.mpesa_message_id, txn)
 
@@ -517,43 +522,48 @@ def get_money_back(
 
     try:
         # Create Transaction record
-        txn = Transaction(
-            business_id=business.id,
-            type="transfer",
-            amount=request.amount,
-            description=request.note or f"Get money back from {account.name}",
-            created_by=current_user.id,
-        )
+        txn_kwargs = {
+            "business_id": business.id,
+            "type": "transfer",
+            "amount": request.amount,
+            "description": request.note or f"Get money back from {account.name}",
+            "created_by": current_user.id,
+        }
+        if request.created_at is not None:
+            txn_kwargs["created_at"] = request.created_at
+        txn = Transaction(**txn_kwargs)
         db.add(txn)
         db.flush()
 
         # Debit source (TrackedAccount)
-        db.add(
-            LedgerEntry(
-                business_id=business.id,
-                transaction_id=txn.id,
-                account_type="tracked",
-                tracked_account_id=account.id,
-                entry_type="debit",
-                amount=request.amount,
-                description=request.note or f"Get money back from {account.name}",
-                created_by=current_user.id,
-            )
-        )
+        entry1_kwargs = {
+            "business_id": business.id,
+            "transaction_id": txn.id,
+            "account_type": "tracked",
+            "tracked_account_id": account.id,
+            "entry_type": "debit",
+            "amount": request.amount,
+            "description": request.note or f"Get money back from {account.name}",
+            "created_by": current_user.id,
+        }
+        if request.created_at is not None:
+            entry1_kwargs["created_at"] = request.created_at
+        db.add(LedgerEntry(**entry1_kwargs))
 
         # Credit destination (Cash or Float)
-        db.add(
-            LedgerEntry(
-                business_id=business.id,
-                transaction_id=txn.id,
-                account_type=request.destination_type,
-                tracked_account_id=None,
-                entry_type="credit",
-                amount=request.amount,
-                description=request.note or f"Get money back from {account.name}",
-                created_by=current_user.id,
-            )
-        )
+        entry2_kwargs = {
+            "business_id": business.id,
+            "transaction_id": txn.id,
+            "account_type": request.destination_type,
+            "tracked_account_id": None,
+            "entry_type": "credit",
+            "amount": request.amount,
+            "description": request.note or f"Get money back from {account.name}",
+            "created_by": current_user.id,
+        }
+        if request.created_at is not None:
+            entry2_kwargs["created_at"] = request.created_at
+        db.add(LedgerEntry(**entry2_kwargs))
 
         _link_mpesa_message(db, business, request.mpesa_message_id, txn)
 
@@ -597,43 +607,48 @@ def receive_money(
     )
 
     try:
-        txn = Transaction(
-            business_id=business.id,
-            type="transfer",
-            amount=request.amount,
-            description=request.note or f"Receive money from {account.name}",
-            created_by=current_user.id,
-        )
+        txn_kwargs = {
+            "business_id": business.id,
+            "type": "transfer",
+            "amount": request.amount,
+            "description": request.note or f"Receive money from {account.name}",
+            "created_by": current_user.id,
+        }
+        if request.created_at is not None:
+            txn_kwargs["created_at"] = request.created_at
+        txn = Transaction(**txn_kwargs)
         db.add(txn)
         db.flush()
 
         # Credit destination Cash/Float (increases operational balance)
-        db.add(
-            LedgerEntry(
-                business_id=business.id,
-                transaction_id=txn.id,
-                account_type=request.destination_type,
-                tracked_account_id=None,
-                entry_type="credit",
-                amount=request.amount,
-                description=request.note or f"Receive money from {account.name}",
-                created_by=current_user.id,
-            )
-        )
+        entry1_kwargs = {
+            "business_id": business.id,
+            "transaction_id": txn.id,
+            "account_type": request.destination_type,
+            "tracked_account_id": None,
+            "entry_type": "credit",
+            "amount": request.amount,
+            "description": request.note or f"Receive money from {account.name}",
+            "created_by": current_user.id,
+        }
+        if request.created_at is not None:
+            entry1_kwargs["created_at"] = request.created_at
+        db.add(LedgerEntry(**entry1_kwargs))
 
         # Credit held position account (increases held balance)
-        db.add(
-            LedgerEntry(
-                business_id=business.id,
-                transaction_id=txn.id,
-                account_type="tracked",
-                tracked_account_id=account.id,
-                entry_type="credit",
-                amount=request.amount,
-                description=request.note or f"Receive money from {account.name}",
-                created_by=current_user.id,
-            )
-        )
+        entry2_kwargs = {
+            "business_id": business.id,
+            "transaction_id": txn.id,
+            "account_type": "tracked",
+            "tracked_account_id": account.id,
+            "entry_type": "credit",
+            "amount": request.amount,
+            "description": request.note or f"Receive money from {account.name}",
+            "created_by": current_user.id,
+        }
+        if request.created_at is not None:
+            entry2_kwargs["created_at"] = request.created_at
+        db.add(LedgerEntry(**entry2_kwargs))
 
         _link_mpesa_message(db, business, request.mpesa_message_id, txn)
 
@@ -698,47 +713,53 @@ def return_money(
         )
 
     try:
-        txn = Transaction(
-            business_id=business.id,
-            type="transfer",
-            amount=request.amount,
-            description=request.note or f"Return money to {account.name}",
-            created_by=current_user.id,
-        )
+        txn_kwargs = {
+            "business_id": business.id,
+            "type": "transfer",
+            "amount": request.amount,
+            "description": request.note or f"Return money to {account.name}",
+            "created_by": current_user.id,
+        }
+        if request.created_at is not None:
+            txn_kwargs["created_at"] = request.created_at
+        txn = Transaction(**txn_kwargs)
         db.add(txn)
         db.flush()
 
         # Debit source Cash/Float (decreases operational balance)
-        db.add(
-            LedgerEntry(
-                business_id=business.id,
-                transaction_id=txn.id,
-                account_type=request.source_type,
-                tracked_account_id=None,
-                entry_type="debit",
-                amount=request.amount,
-                description=request.note or f"Return money to {account.name}",
-                created_by=current_user.id,
-            )
-        )
+        entry1_kwargs = {
+            "business_id": business.id,
+            "transaction_id": txn.id,
+            "account_type": request.source_type,
+            "tracked_account_id": None,
+            "entry_type": "debit",
+            "amount": request.amount,
+            "description": request.note or f"Return money to {account.name}",
+            "created_by": current_user.id,
+        }
+        if request.created_at is not None:
+            entry1_kwargs["created_at"] = request.created_at
+        db.add(LedgerEntry(**entry1_kwargs))
 
         # Debit held position account (decreases held balance)
-        db.add(
-            LedgerEntry(
-                business_id=business.id,
-                transaction_id=txn.id,
-                account_type="tracked",
-                tracked_account_id=account.id,
-                entry_type="debit",
-                amount=request.amount,
-                description=request.note or f"Return money to {account.name}",
-                created_by=current_user.id,
-            )
-        )
+        entry2_kwargs = {
+            "business_id": business.id,
+            "transaction_id": txn.id,
+            "account_type": "tracked",
+            "tracked_account_id": account.id,
+            "entry_type": "debit",
+            "amount": request.amount,
+            "description": request.note or f"Return money to {account.name}",
+            "created_by": current_user.id,
+        }
+        if request.created_at is not None:
+            entry2_kwargs["created_at"] = request.created_at
+        db.add(LedgerEntry(**entry2_kwargs))
 
         _link_mpesa_message(db, business, request.mpesa_message_id, txn)
 
         db.commit()
+
 
         return TransferResponse(
             transaction_id=txn.id,

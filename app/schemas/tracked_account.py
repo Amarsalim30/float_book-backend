@@ -76,6 +76,7 @@ class GiveMoneyRequest(BaseModel):
     amount: Decimal
     note: Optional[str] = None
     mpesa_message_id: Optional[int] = None
+    created_at: Optional[datetime] = None
 
     @field_validator("amount")
     @classmethod
@@ -101,6 +102,7 @@ class GetMoneyBackRequest(BaseModel):
     amount: Decimal
     note: Optional[str] = None
     mpesa_message_id: Optional[int] = None
+    created_at: Optional[datetime] = None
 
     @field_validator("amount")
     @classmethod
@@ -126,6 +128,7 @@ class ReceiveMoneyRequest(BaseModel):
     amount: Decimal
     note: Optional[str] = None
     mpesa_message_id: Optional[int] = None
+    created_at: Optional[datetime] = None
 
     @field_validator("amount")
     @classmethod
@@ -151,6 +154,8 @@ class ReturnMoneyRequest(BaseModel):
     amount: Decimal
     note: Optional[str] = None
     mpesa_message_id: Optional[int] = None
+    created_at: Optional[datetime] = None
+
 
     @field_validator("amount")
     @classmethod

@@ -50,19 +50,24 @@ def create_entry(
     created_by: int,
     description: str | None = None,
     transaction_id: int | None = None,
+    created_at: datetime | None = None,
 ) -> LedgerEntry:
     """Insert a credit or debit ledger entry."""
-    entry = LedgerEntry(
-        business_id=business_id,
-        account_type=account_type,
-        entry_type=entry_type,
-        amount=amount,
-        description=description,
-        transaction_id=transaction_id,
-        created_by=created_by,
-    )
+    entry_kwargs = {
+        "business_id": business_id,
+        "account_type": account_type,
+        "entry_type": entry_type,
+        "amount": amount,
+        "description": description,
+        "transaction_id": transaction_id,
+        "created_by": created_by,
+    }
+    if created_at is not None:
+        entry_kwargs["created_at"] = created_at
+    entry = LedgerEntry(**entry_kwargs)
     db.add(entry)
     return entry
+
 
 
 def get_balance(db: Session, business_id: int, account_type: str) -> Decimal:

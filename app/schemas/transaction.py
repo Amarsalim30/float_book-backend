@@ -24,6 +24,8 @@ class TransactionCreate(BaseModel):
     description: Optional[str] = None
     reference: Optional[str] = None
     person_id: Optional[int] = None
+    created_at: Optional[datetime] = None
+
 
     @field_validator("type")
     @classmethod

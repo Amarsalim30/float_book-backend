@@ -189,6 +189,9 @@ def create(db: Session, current_user: User, request: TransactionCreate) -> Trans
             "person_id": request.person_id,
             "created_by": current_user.id,
         }
+        if request.created_at is not None:
+            transaction_data["created_at"] = request.created_at
+
         transaction = transaction_repository.create(db, transaction_data)
 
         # Create Ledger Entries
@@ -202,7 +205,9 @@ def create(db: Session, current_user: User, request: TransactionCreate) -> Trans
                 created_by=current_user.id,
                 description=request.description or f"{request.type.replace('_', ' ').title()} entry",
                 transaction_id=transaction.id,
+                created_at=request.created_at,
             )
+
 
         # Link MpesaMessage if provided (for sale, withdrawal, or expense)
         _link_mpesa_messages(
