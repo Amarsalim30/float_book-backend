@@ -128,7 +128,7 @@ def _compute_effects(
 
 def _resolve_mpesa_message_ids(request: TransactionCreate) -> list[int] | None:
     """Resolve the requested SMS ids, preferring the batch list over the single id."""
-    if request.mpesa_message_ids:
+    if request.mpesa_message_ids is not None:
         return list(request.mpesa_message_ids)
     if request.mpesa_message_id is not None:
         return [request.mpesa_message_id]
