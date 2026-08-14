@@ -29,7 +29,8 @@ def get_recent_messages(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get recent unused incoming M-Pesa messages for manual selection during Sale creation."""
+    """Get recent unused M-Pesa messages for manual selection when recording
+    a transaction or transfer with SMS proof."""
     return mpesa_service.get_recent_messages(
         db, current_user, direction=direction, unused=unused, limit=limit
     )

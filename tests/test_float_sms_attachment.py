@@ -33,13 +33,13 @@ def _ingest(client, auth_headers, reference, direction, amount=5000.0, sender="C
 
 def test_unused_messages_list_by_direction(client, auth_headers):
     _complete_onboarding(client, auth_headers)
-    _ingest(client, auth_headers, "TAKE123", "MONEY_RECEIVED")
-    give_id = _ingest(client, auth_headers, "GIVE456", "MONEY_SENT")
+    take_id = _ingest(client, auth_headers, "TAKE123", "MONEY_SENT")
+    _ingest(client, auth_headers, "GIVE456", "MONEY_RECEIVED")
 
     res = client.get("/api/v1/mpesa/messages?direction=MONEY_SENT&unused=true", headers=auth_headers)
     assert res.status_code == 200
     ids = [m["id"] for m in res.json()]
-    assert give_id in ids
+    assert take_id in ids
     assert all(m["direction"] == "MONEY_SENT" for m in res.json())
 
     res = client.get("/api/v1/mpesa/messages?direction=MONEY_RECEIVED&unused=true", headers=auth_headers)
@@ -49,10 +49,10 @@ def test_unused_messages_list_by_direction(client, auth_headers):
 
 def test_any_direction_can_attach_to_any_type(client, auth_headers):
     _complete_onboarding(client, auth_headers)
-    give_id = _ingest(client, auth_headers, "GIVE456", "MONEY_SENT")
-    take_id = _ingest(client, auth_headers, "TAKE789", "MONEY_RECEIVED")
+    give_id = _ingest(client, auth_headers, "GIVE456", "MONEY_RECEIVED")
+    take_id = _ingest(client, auth_headers, "TAKE789", "MONEY_SENT")
 
-    # Give (MONEY_SENT) is accepted for a withdrawal.
+    # A withdrawal is float-in, so a Give SMS (MONEY_RECEIVED) is its natural proof.
     res = client.post(
         "/api/v1/transactions/",
         headers=auth_headers,
@@ -61,7 +61,7 @@ def test_any_direction_can_attach_to_any_type(client, auth_headers):
     assert res.status_code in (200, 201), res.json()
     assert res.json()["mpesa_message_id"] == give_id
 
-    # The picker toggle lets a user back a withdrawal with a Take SMS too.
+    # The picker toggle still lets a user back a withdrawal with a Take SMS too.
     res = client.post(
         "/api/v1/transactions/",
         headers=auth_headers,
@@ -73,10 +73,10 @@ def test_any_direction_can_attach_to_any_type(client, auth_headers):
 
 def test_add_float_accepts_any_direction(client, auth_headers):
     _complete_onboarding(client, auth_headers)
-    give_id = _ingest(client, auth_headers, "GIVE456", "MONEY_SENT")
-    take_id = _ingest(client, auth_headers, "TAKE789", "MONEY_RECEIVED")
+    give_id = _ingest(client, auth_headers, "GIVE456", "MONEY_RECEIVED")
+    take_id = _ingest(client, auth_headers, "TAKE789", "MONEY_SENT")
 
-    # Take (MONEY_RECEIVED) is accepted for an add_float deposit.
+    # Take (MONEY_SENT) is accepted for an add_float deposit.
     res = client.post(
         "/api/v1/transactions/",
         headers=auth_headers,
@@ -85,7 +85,7 @@ def test_add_float_accepts_any_direction(client, auth_headers):
     assert res.status_code in (200, 201), res.json()
     assert res.json()["mpesa_message_id"] == take_id
 
-    # Give (MONEY_SENT) is also accepted for an add_float deposit.
+    # Give (MONEY_RECEIVED) is also accepted for an add_float deposit.
     res = client.post(
         "/api/v1/transactions/",
         headers=auth_headers,
@@ -114,7 +114,7 @@ def _assert_transfer_linked(client, auth_headers, transaction_id, sms_id):
 
 def test_give_money_links_sms_proof(client, auth_headers):
     _complete_onboarding(client, auth_headers)
-    sms_id = _ingest(client, auth_headers, "GIVE500", "MONEY_SENT")
+    sms_id = _ingest(client, auth_headers, "TAKE500", "MONEY_SENT")
     acct = _create_account(client, auth_headers)
 
     res = client.post(
@@ -145,7 +145,7 @@ def test_get_money_back_links_sms_proof(client, auth_headers):
         headers=auth_headers,
         json={"source_type": "float", "tracked_account_id": acct["id"], "amount": 10000.0},
     )
-    sms_id = _ingest(client, auth_headers, "TAKE200", "MONEY_RECEIVED")
+    sms_id = _ingest(client, auth_headers, "GIVE200", "MONEY_RECEIVED")
 
     res = client.post(
         "/api/v1/tracked-accounts/get-back",
@@ -163,7 +163,7 @@ def test_get_money_back_links_sms_proof(client, auth_headers):
 
 def test_receive_money_links_sms_proof(client, auth_headers):
     _complete_onboarding(client, auth_headers)
-    sms_id = _ingest(client, auth_headers, "TAKE500", "MONEY_RECEIVED")
+    sms_id = _ingest(client, auth_headers, "GIVE500", "MONEY_RECEIVED")
     held = _create_account(client, auth_headers, name="Amar Deposit", position_type="held")
 
     res = client.post(
@@ -188,7 +188,7 @@ def test_return_money_links_sms_proof(client, auth_headers):
         headers=auth_headers,
         json={"tracked_account_id": held["id"], "destination_type": "cash", "amount": 5000.0},
     )
-    sms_id = _ingest(client, auth_headers, "GIVE500", "MONEY_SENT")
+    sms_id = _ingest(client, auth_headers, "TAKE500", "MONEY_SENT")
 
     res = client.post(
         "/api/v1/tracked-accounts/return",
@@ -219,7 +219,7 @@ def test_transfer_rejects_foreign_business_sms(client, auth_headers):
     ).json()["access_token"]
     headers_b = {"Authorization": f"Bearer {token_b}"}
     _complete_onboarding(client, headers_b)
-    foreign_sms = _ingest(client, headers_b, "GIVE500", "MONEY_SENT")
+    foreign_sms = _ingest(client, headers_b, "TAKE500", "MONEY_SENT")
 
     res = client.post(
         "/api/v1/tracked-accounts/give",
@@ -240,7 +240,7 @@ def test_transfer_rejects_foreign_business_sms(client, auth_headers):
 
 def test_transfer_rejects_already_linked_sms(client, auth_headers):
     _complete_onboarding(client, auth_headers)
-    sms_id = _ingest(client, auth_headers, "GIVE500", "MONEY_SENT")
+    sms_id = _ingest(client, auth_headers, "TAKE500", "MONEY_SENT")
     acct_a = _create_account(client, auth_headers, name="Account A")
     acct_b = _create_account(client, auth_headers, name="Account B")
 
