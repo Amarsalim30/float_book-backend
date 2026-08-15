@@ -16,13 +16,13 @@
     {
       "schema": "public",
       "table": "ledger_entries",
-      "rows": 101,
+      "rows": 110,
       "file": "data/ledger_entries.csv"
     },
     {
       "schema": "public",
       "table": "mpesa_messages",
-      "rows": 913,
+      "rows": 746,
       "file": "data/mpesa_messages.csv"
     },
     {
@@ -40,7 +40,7 @@
     {
       "schema": "public",
       "table": "transactions",
-      "rows": 66,
+      "rows": 73,
       "file": "data/transactions.csv"
     },
     {

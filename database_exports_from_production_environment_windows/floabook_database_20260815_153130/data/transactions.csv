@@ -38,8 +38,6 @@ id,type,amount,description,reference,person_id,created_by,created_at,updated_at,
 42,expense,2000.00,To Swaleh (Memon Arif),,,3,2026-08-12 14:54:02.210778+03,,3,,0.00,mpesa
 43,transfer,320.00,Give money to Rupenkumar Patel,,,3,2026-08-12 15:35:30.467478+03,,3,,0.00,
 44,transfer,320.00,Get money back from Rupenkumar Patel,,,3,2026-08-12 15:35:47.489244+03,,3,,0.00,
-45,transfer,500.00,Give money to Ammar Batheif,,,3,2026-08-12 15:38:14.853287+03,,3,,0.00,
-46,transfer,500.00,Get money back from Ammar Batheif,,,3,2026-08-12 15:39:02.597298+03,,3,,0.00,
 47,withdrawal,6000.00,Douglas Zake,,,3,2026-08-12 15:41:50.043986+03,,3,,0.00,
 48,withdrawal,65000.00,Customer M-Pesa withdrawal,,,3,2026-08-12 15:42:30.06759+03,,3,,0.00,
 49,withdrawal,2000.00,Customer M-Pesa withdrawal,,,3,2026-08-12 15:42:50.91057+03,,3,,0.00,
@@ -61,7 +59,16 @@ id,type,amount,description,reference,person_id,created_by,created_at,updated_at,
 63,deposit,2000.00,Customer M-Pesa deposit,,,3,2026-08-13 18:08:51.582355+03,,3,,0.00,
 64,expense,4800.00,Said Swaleh (k T),,,3,2026-08-14 11:32:30.00197+03,,3,,0.00,mpesa
 65,expense,1800.00,,,,3,2026-08-14 15:09:47.7594+03,,3,,0.00,mpesa
-66,transfer,40000.00,Give money to Amar Maery,,,3,2026-08-14 15:11:20.167861+03,,3,,0.00,
 67,expense,30000.00,saf 2,,,3,2026-08-14 15:14:08.756854+03,,3,,0.00,mpesa
 68,sale,480.00,,,,3,2026-08-14 18:04:32.744729+03,,3,480.00,0.00,cash
 69,sale,17950.00,,,,3,2026-08-14 18:04:40.992536+03,,3,17950.00,0.00,mpesa
+70,expense,110.00,fare to zahara(MLD 3.5 & 3.2kw inverters),,,3,2026-08-14 21:00:00+03,,3,,0.00,cash
+66,transfer,90197.00,Give money to Amar Maery,,,3,2026-08-14 15:11:20.167861+03,2026-08-15 11:33:32.330101+03,3,,0.00,
+72,deposit,20000.00,Customer M-Pesa deposit,,,3,2026-08-15 12:41:58.72955+03,,3,,0.00,
+73,sale,600.00,,,,3,2026-08-08 18:00:00+03,,3,600.00,0.00,mpesa
+75,expense,12000.00,,,,3,2026-08-08 18:00:00+03,,3,,0.00,mpesa
+76,transfer,30000.00,Give money to Amar Maery,,,3,2026-08-15 14:31:43.531248+03,,3,,0.00,
+77,deposit,16500.00,Customer M-Pesa deposit,,,3,2026-08-15 14:32:02.617848+03,,3,,0.00,
+71,sale,14100.00,,,,3,2026-08-15 11:33:46.639491+03,2026-08-15 14:51:04.201085+03,3,14100.00,0.00,mpesa
+80,withdrawal,4500.00,Customer M-Pesa withdrawal,,,3,2026-08-08 15:39:00+03,,3,,0.00,
+81,add_float,300000.00,Owner Float Addition,,,3,2026-08-15 15:04:31.719638+03,,3,,0.00,

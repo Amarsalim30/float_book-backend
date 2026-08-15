@@ -59,7 +59,8 @@ CREATE TABLE mpesa_messages (
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT now(), 
 	CONSTRAINT mpesa_messages_pkey PRIMARY KEY (id), 
 	CONSTRAINT mpesa_messages_business_id_fkey FOREIGN KEY(business_id) REFERENCES businesses (id), 
-	CONSTRAINT mpesa_messages_transaction_id_fkey FOREIGN KEY(transaction_id) REFERENCES transactions (id)
+	CONSTRAINT mpesa_messages_transaction_id_fkey FOREIGN KEY(transaction_id) REFERENCES transactions (id), 
+	CONSTRAINT uq_mpesa_messages_business_reference UNIQUE NULLS DISTINCT (business_id, reference)
 )
 
 ;
