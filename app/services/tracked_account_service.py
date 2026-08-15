@@ -368,30 +368,40 @@ def create_position_if_missing(
     return account
 
 
-def _link_mpesa_message(
+def _resolve_mpesa_message_ids(request) -> list[int] | None:
+    """Resolve the requested SMS ids, preferring the batch list over the single id."""
+    if getattr(request, "mpesa_message_ids", None) is not None:
+        return list(request.mpesa_message_ids)
+    if getattr(request, "mpesa_message_id", None) is not None:
+        return [request.mpesa_message_id]
+    return None
+
+
+def _link_mpesa_messages(
     db: Session,
     business,
-    mpesa_message_id: int | None,
+    message_ids: list[int] | None,
     transaction: Transaction,
 ) -> None:
-    """Validate and link an M-Pesa SMS to a transfer transaction, if provided."""
-    if mpesa_message_id is None:
+    """Validate and link M-Pesa SMS proofs to a transfer transaction."""
+    if not message_ids:
         return
-    mpesa_msg = mpesa_repository.get_by_id(db, mpesa_message_id)
-    if not mpesa_msg or mpesa_msg.business_id != business.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="M-Pesa message not found for business",
-        )
-    # Direction is not enforced server-side: the picker defaults to the
-    # expected direction per transfer type but lets the user switch, so any
-    # unused Take/Give SMS may be attached to any transfer.
-    if mpesa_msg.transaction_id is not None and mpesa_msg.transaction_id != transaction.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="SMS is already linked to another transaction",
-        )
-    mpesa_msg.transaction_id = transaction.id
+    for message_id in message_ids:
+        mpesa_msg = mpesa_repository.get_by_id(db, message_id)
+        if not mpesa_msg or mpesa_msg.business_id != business.id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="M-Pesa message not found for business",
+            )
+        # Direction is not enforced server-side: the picker defaults to the
+        # expected direction per transfer type but lets the user switch, so any
+        # unused Take/Give SMS may be attached to any transfer.
+        if mpesa_msg.transaction_id is not None and mpesa_msg.transaction_id != transaction.id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="SMS is already linked to another transaction",
+            )
+        mpesa_msg.transaction_id = transaction.id
 
 
 
@@ -471,7 +481,7 @@ def give_money(
             entry2_kwargs["created_at"] = request.created_at
         db.add(LedgerEntry(**entry2_kwargs))
 
-        _link_mpesa_message(db, business, request.mpesa_message_id, txn)
+        _link_mpesa_messages(db, business, _resolve_mpesa_message_ids(request), txn)
 
         db.commit()
 
@@ -565,7 +575,7 @@ def get_money_back(
             entry2_kwargs["created_at"] = request.created_at
         db.add(LedgerEntry(**entry2_kwargs))
 
-        _link_mpesa_message(db, business, request.mpesa_message_id, txn)
+        _link_mpesa_messages(db, business, _resolve_mpesa_message_ids(request), txn)
 
         db.commit()
 
@@ -650,7 +660,7 @@ def receive_money(
             entry2_kwargs["created_at"] = request.created_at
         db.add(LedgerEntry(**entry2_kwargs))
 
-        _link_mpesa_message(db, business, request.mpesa_message_id, txn)
+        _link_mpesa_messages(db, business, _resolve_mpesa_message_ids(request), txn)
 
         db.commit()
 
@@ -756,7 +766,7 @@ def return_money(
             entry2_kwargs["created_at"] = request.created_at
         db.add(LedgerEntry(**entry2_kwargs))
 
-        _link_mpesa_message(db, business, request.mpesa_message_id, txn)
+        _link_mpesa_messages(db, business, _resolve_mpesa_message_ids(request), txn)
 
         db.commit()
 

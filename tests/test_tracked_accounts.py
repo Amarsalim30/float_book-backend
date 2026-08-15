@@ -717,3 +717,135 @@ def test_create_account_is_idempotent_by_normalized_name_and_position(client, au
     nahid = by_name["nahid"][0]
     assert nahid["tracked_position"]["account_id"] == nahid_tracked["id"]
     assert nahid["held_position"]["account_id"] == nahid_held["id"]
+
+
+def _ingest_test_sms(client, auth_headers, ref: str, amount: float, direction: str = "MONEY_SENT"):
+    from datetime import datetime, timezone
+    res = client.post(
+        "/api/v1/mpesa/messages",
+        headers=auth_headers,
+        json={
+            "reference": ref,
+            "sender": f"Contact {ref}",
+            "amount": amount,
+            "direction": direction,
+            "raw_text": f"M-Pesa {direction} {amount} ref {ref}",
+            "message_timestamp": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+    assert res.status_code == 201, res.json()
+    return res.json()["id"]
+
+
+def test_give_money_with_multiple_mpesa_messages(client, auth_headers):
+    _complete_onboarding(client, auth_headers, cash=100000.0, float_bal=100000.0)
+    acct = client.post(
+        "/api/v1/tracked-accounts/",
+        headers=auth_headers,
+        json={"name": "Supplier ABC", "account_type": "business"},
+    ).json()
+    sms1 = _ingest_test_sms(client, auth_headers, "GIVE_SMS_1", 3000.0, "MONEY_SENT")
+    sms2 = _ingest_test_sms(client, auth_headers, "GIVE_SMS_2", 2000.0, "MONEY_SENT")
+
+    res = client.post(
+        "/api/v1/tracked-accounts/give",
+        headers=auth_headers,
+        json={
+            "source_type": "float",
+            "tracked_account_id": acct["id"],
+            "amount": 5000.0,
+            "mpesa_message_ids": [sms1, sms2],
+            "note": "Advance payment in two tranches",
+        },
+    )
+    assert res.status_code in (200, 201), res.json()
+    data = res.json()
+    txn_id = data["transaction_id"]
+
+    # Verify transaction details has both SMS messages linked
+    txn_res = client.get(f"/api/v1/transactions/{txn_id}", headers=auth_headers)
+    assert txn_res.status_code in (200, 201)
+    txn_data = txn_res.json()
+    assert [m["id"] for m in txn_data["mpesa_messages"]] == [sms1, sms2]
+    assert txn_data["mpesa_message_id"] == sms1
+
+
+def test_get_money_back_with_multiple_mpesa_messages(client, auth_headers):
+    _complete_onboarding(client, auth_headers, cash=100000.0, float_bal=100000.0)
+    acct = client.post(
+        "/api/v1/tracked-accounts/",
+        headers=auth_headers,
+        json={"name": "Customer XYZ", "account_type": "person"},
+    ).json()
+    # First give money so balance exists
+    client.post(
+        "/api/v1/tracked-accounts/give",
+        headers=auth_headers,
+        json={"source_type": "cash", "tracked_account_id": acct["id"], "amount": 10000.0},
+    )
+    sms1 = _ingest_test_sms(client, auth_headers, "GET_SMS_1", 4000.0, "MONEY_RECEIVED")
+    sms2 = _ingest_test_sms(client, auth_headers, "GET_SMS_2", 6000.0, "MONEY_RECEIVED")
+
+    res = client.post(
+        "/api/v1/tracked-accounts/get-back",
+        headers=auth_headers,
+        json={
+            "destination_type": "float",
+            "tracked_account_id": acct["id"],
+            "amount": 10000.0,
+            "mpesa_message_ids": [sms1, sms2],
+        },
+    )
+    assert res.status_code in (200, 201), res.json()
+    txn_id = res.json()["transaction_id"]
+
+    txn_res = client.get(f"/api/v1/transactions/{txn_id}", headers=auth_headers)
+    assert txn_res.status_code in (200, 201)
+    txn_data = txn_res.json()
+    assert [m["id"] for m in txn_data["mpesa_messages"]] == [sms1, sms2]
+
+
+def test_receive_and_return_money_with_multiple_mpesa_messages(client, auth_headers):
+    _complete_onboarding(client, auth_headers, cash=100000.0, float_bal=100000.0)
+    acct = client.post(
+        "/api/v1/tracked-accounts/",
+        headers=auth_headers,
+        json={"name": "Depositor Mary", "position_type": "held"},
+    ).json()
+    rec1 = _ingest_test_sms(client, auth_headers, "REC_SMS_1", 5000.0, "MONEY_RECEIVED")
+    rec2 = _ingest_test_sms(client, auth_headers, "REC_SMS_2", 3000.0, "MONEY_RECEIVED")
+
+    # Receive money into held position with 2 proofs
+    res_rec = client.post(
+        "/api/v1/tracked-accounts/receive",
+        headers=auth_headers,
+        json={
+            "destination_type": "cash",
+            "tracked_account_id": acct["id"],
+            "amount": 8000.0,
+            "mpesa_message_ids": [rec1, rec2],
+        },
+    )
+    assert res_rec.status_code in (200, 201), res_rec.json()
+    rec_txn_id = res_rec.json()["transaction_id"]
+    rec_txn_data = client.get(f"/api/v1/transactions/{rec_txn_id}", headers=auth_headers).json()
+    assert [m["id"] for m in rec_txn_data["mpesa_messages"]] == [rec1, rec2]
+
+    # Return money from held position with 2 proofs
+    ret1 = _ingest_test_sms(client, auth_headers, "RET_SMS_1", 4000.0, "MONEY_SENT")
+    ret2 = _ingest_test_sms(client, auth_headers, "RET_SMS_2", 4000.0, "MONEY_SENT")
+    res_ret = client.post(
+        "/api/v1/tracked-accounts/return",
+        headers=auth_headers,
+        json={
+            "source_type": "cash",
+            "tracked_account_id": acct["id"],
+            "amount": 8000.0,
+            "mpesa_message_ids": [ret1, ret2],
+        },
+    )
+    assert res_ret.status_code in (200, 201), res_ret.json()
+    ret_txn_id = res_ret.json()["transaction_id"]
+    ret_txn_data = client.get(f"/api/v1/transactions/{ret_txn_id}", headers=auth_headers).json()
+    assert [m["id"] for m in ret_txn_data["mpesa_messages"]] == [ret1, ret2]
+
