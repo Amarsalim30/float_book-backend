@@ -50,3 +50,15 @@ def get_recent_unused_incoming(db: Session, business_id: int, limit: int = 20) -
     return get_recent_unused(
         db, business_id=business_id, direction="MONEY_RECEIVED", limit=limit
     )
+
+
+def delete_unused_older_than(db: Session, cutoff) -> int:
+    """Delete unused (never attached to a transaction) messages older than cutoff."""
+    return (
+        db.query(MpesaMessage)
+        .filter(
+            MpesaMessage.transaction_id.is_(None),
+            MpesaMessage.message_timestamp < cutoff,
+        )
+        .delete(synchronize_session=False)
+    )

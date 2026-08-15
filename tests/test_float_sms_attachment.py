@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 
 def _complete_onboarding(client, auth_headers):
@@ -267,3 +267,63 @@ def test_transfer_rejects_already_linked_sms(client, auth_headers):
         },
     )
     assert res.status_code == 400, res.json()
+
+
+def test_prune_unused_messages_respects_retention(client, auth_headers, test_db):
+    from datetime import timedelta
+
+    from app.models.mpesa_message import MpesaMessage
+    from app.services import mpesa_service
+
+    _complete_onboarding(client, auth_headers)
+    now = datetime.now(timezone.utc)
+    old = (now - timedelta(days=200)).isoformat()
+    recent = now.isoformat()
+
+    res = client.post(
+        "/api/v1/mpesa/messages",
+        headers=auth_headers,
+        json={
+            "reference": "OLDUNUSED",
+            "sender": "MPESA",
+            "amount": 5000.0,
+            "direction": "MONEY_RECEIVED",
+            "raw_text": "raw Give 5000",
+            "message_timestamp": old,
+        },
+    )
+    assert res.status_code == 201, res.json()
+
+    res = client.post(
+        "/api/v1/mpesa/messages",
+        headers=auth_headers,
+        json={
+            "reference": "RECENTUNUSED",
+            "sender": "MPESA",
+            "amount": 1000.0,
+            "direction": "MONEY_RECEIVED",
+            "raw_text": "raw Give 1000",
+            "message_timestamp": recent,
+        },
+    )
+    assert res.status_code == 201, res.json()
+
+    old_used = MpesaMessage(
+        business_id=1,
+        reference="OLDUSED",
+        sender="MPESA",
+        amount=2000.0,
+        direction="MONEY_SENT",
+        raw_text="raw Take 2000",
+        message_timestamp=now - timedelta(days=200),
+        transaction_id=1,
+    )
+    test_db.add(old_used)
+    test_db.commit()
+
+    deleted = mpesa_service.prune_unused_messages(test_db)
+    test_db.commit()
+
+    assert deleted == 1
+    remaining = test_db.query(MpesaMessage).all()
+    assert {m.reference for m in remaining} == {"RECENTUNUSED", "OLDUSED"}

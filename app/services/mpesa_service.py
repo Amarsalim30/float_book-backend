@@ -1,10 +1,15 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.user import User
 from app.repositories import business_repository, mpesa_repository
 from app.schemas.mpesa import MpesaMessageCreate, MpesaMessageResponse
+
+settings = get_settings()
 
 
 def create_message(
@@ -76,3 +81,15 @@ def get_recent_messages(
     )
 
     return [MpesaMessageResponse.model_validate(msg) for msg in messages]
+
+
+def prune_unused_messages(db: Session) -> int:
+    """Delete unused M-Pesa messages older than the retention window.
+
+    Called on server startup. Used (attached) messages are proof and are never
+    pruned.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(
+        days=settings.MPESA_UNUSED_RETENTION_DAYS
+    )
+    return mpesa_repository.delete_unused_older_than(db, cutoff)
