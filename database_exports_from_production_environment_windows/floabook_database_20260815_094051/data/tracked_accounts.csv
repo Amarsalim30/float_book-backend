@@ -1,0 +1,13 @@
+id,business_id,name,account_type,phone,notes,created_by,created_at,updated_at,person_id,position_type
+1,1,Amar,person,,,1,2026-08-08 13:46:08.502754+03,,,tracked
+2,2,MAM,person,,,2,2026-08-08 14:41:23.121387+03,,,tracked
+3,2,sam,person,,,2,2026-08-08 14:41:35.575661+03,,,tracked
+4,2,smm,person,,,2,2026-08-08 15:25:36.18589+03,,,tracked
+5,2,AA,person,,,2,2026-08-08 15:26:22.538944+03,,,tracked
+6,2,sam,person,,,2,2026-08-08 16:06:15.996144+03,,,held
+7,3,Rupenkumar Patel,person,0722411685,,3,2026-08-10 14:43:36.822723+03,,,tracked
+8,3,Abdulbasit,person,0713553910,,3,2026-08-11 14:57:19.333433+03,,,tracked
+9,3,Ammar Batheif,person,,,3,2026-08-12 15:37:43.658928+03,,,tracked
+10,3,Amar Maery,person,,,3,2026-08-12 17:54:57.762215+03,,,tracked
+11,3,Rayyan Swaleh,person,,,3,2026-08-12 17:59:05.344957+03,,,tracked
+12,3,sambula,person,,,3,2026-08-13 18:08:41.155657+03,,,tracked

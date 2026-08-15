@@ -1,0 +1,4 @@
+id,email,hashed_password,full_name,is_active,created_at,updated_at
+1,asabatheif@gmail.co,$2b$12$ML4ob.kkv0qpBCHQREPIquxtl2vT4TwfOiBFZPrDAzTed5ZfPOQU2,Amar Salim,1,2026-08-08 13:32:10.479179+03,
+2,asabatheif@gmail.com,$2b$12$6L1PGZSBkAFEpD0vgYXyIuZsT/iGES6AY3M9oHRymbugHvUAwdqtu,Amar Salim,1,2026-08-08 14:40:49.444149+03,
+3,taslamenergysolutions@yahoo.com,$2b$12$BZ4cc6QGZ9kQ8vHSZV71heXKi6/dpiYlMojW64R6Vxh6X7GKZC9E.,TASLAM,1,2026-08-08 16:08:50.348797+03,

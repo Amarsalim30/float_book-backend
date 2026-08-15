@@ -1,0 +1,53 @@
+{
+  "format": "schema.sql plus per-table CSV",
+  "tables": [
+    {
+      "schema": "public",
+      "table": "alembic_version",
+      "rows": 1,
+      "file": "data/alembic_version.csv"
+    },
+    {
+      "schema": "public",
+      "table": "businesses",
+      "rows": 3,
+      "file": "data/businesses.csv"
+    },
+    {
+      "schema": "public",
+      "table": "ledger_entries",
+      "rows": 101,
+      "file": "data/ledger_entries.csv"
+    },
+    {
+      "schema": "public",
+      "table": "mpesa_messages",
+      "rows": 913,
+      "file": "data/mpesa_messages.csv"
+    },
+    {
+      "schema": "public",
+      "table": "people",
+      "rows": 0,
+      "file": "data/people.csv"
+    },
+    {
+      "schema": "public",
+      "table": "tracked_accounts",
+      "rows": 12,
+      "file": "data/tracked_accounts.csv"
+    },
+    {
+      "schema": "public",
+      "table": "transactions",
+      "rows": 66,
+      "file": "data/transactions.csv"
+    },
+    {
+      "schema": "public",
+      "table": "users",
+      "rows": 3,
+      "file": "data/users.csv"
+    }
+  ]
+}

@@ -1,0 +1,67 @@
+id,type,amount,description,reference,person_id,created_by,created_at,updated_at,business_id,amount_received,change_amount,payment_method
+1,transfer,100000.00,Give money to Amar,,,1,2026-08-08 13:46:23.424695+03,,1,,0.00,
+2,transfer,100000.00,Give money to Amar,,,1,2026-08-08 13:46:32.080668+03,,1,,0.00,
+3,transfer,10.00,Give money to sam,,,2,2026-08-08 15:25:27.038305+03,,2,,0.00,
+4,transfer,1000.00,Receive money from sam,,,2,2026-08-08 16:06:15.996144+03,,2,,0.00,
+6,withdrawal,7500.00,Customer M-Pesa withdrawal,,,3,2026-08-08 17:55:11.949537+03,,3,,0.00,
+7,sale,23460.00,,,,3,2026-08-08 17:56:43.386257+03,,3,23460.00,0.00,cash
+9,expense,150.00,Felix usafi,,,3,2026-08-10 09:35:23.18573+03,,3,,0.00,cash
+10,expense,5000.00,Hamadi,,,3,2026-08-10 09:50:31.23222+03,,3,,0.00,cash
+11,expense,100.00,Juice Karkadee (consumed last Friday),,,3,2026-08-10 10:49:13.274151+03,,3,,0.00,mpesa
+12,add_float,400000.00,Owner Float Addition,,,3,2026-08-10 11:56:43.298441+03,,3,,0.00,
+13,expense,124300.00,Kitwabala,,,3,2026-08-10 11:57:16.191089+03,,3,,0.00,mpesa
+14,withdrawal,28000.00,Customer M-Pesa withdrawal,,,3,2026-08-10 12:20:43.396317+03,,3,,0.00,
+15,expense,900.00,Hamid Salim ( 2 cartons ),,,3,2026-08-10 12:31:38.809572+03,,3,,0.00,mpesa
+16,expense,1450.00,Wahesco Delivery ya last week,,,3,2026-08-10 12:35:50.407541+03,,3,,0.00,cash
+17,expense,300.00,mzungu to lamu parcel,,,3,2026-08-10 13:52:43.120593+03,,3,,0.00,mpesa
+18,withdrawal,1000.00,Customer M-Pesa withdrawal,,,3,2026-08-10 14:42:07.694689+03,,3,,0.00,
+19,transfer,10000.00,Give money to Rupenkumar Patel,,,3,2026-08-10 14:43:47.822832+03,,3,,0.00,
+20,transfer,10000.00,Get money back from Rupenkumar Patel,,,3,2026-08-10 14:44:00.524908+03,,3,,0.00,
+21,sale,6350.00,,,,3,2026-08-10 17:55:18.697307+03,,3,6350.00,0.00,cash
+22,sale,400.00,,,,3,2026-08-10 17:55:39.796854+03,,3,400.00,0.00,mpesa
+23,expense,12555.00,Abdulbasit(WAMBUI),,,3,2026-08-11 08:58:03.503309+03,,3,,0.00,mpesa
+25,expense,680.00,mifuko,,,3,2026-08-11 11:56:59.512198+03,,3,,0.00,cash
+26,expense,3940.00,soko ndogo,,,3,2026-08-11 14:52:27.229245+03,,3,,0.00,mpesa
+27,withdrawal,2000.00,Customer M-Pesa withdrawal,,,3,2026-08-11 14:58:10.919232+03,,3,,0.00,
+28,withdrawal,100.00,Customer M-Pesa withdrawal,,,3,2026-08-11 14:58:21.223373+03,,3,,0.00,
+29,expense,1500.00,Swaleh Said Swaleh,,,3,2026-08-11 15:33:15.963501+03,,3,,0.00,mpesa
+30,withdrawal,7300.00,Customer M-Pesa withdrawal,,,3,2026-08-11 16:02:24.558572+03,,3,,0.00,
+31,expense,100.00,Pasta to zahara,,,3,2026-08-11 17:04:27.770227+03,,3,,0.00,cash
+32,expense,13500.00,Cheson Logistics,,,3,2026-08-11 17:08:18.453826+03,,3,,0.00,mpesa
+35,expense,59208.00,To Abdulbasit (Costwise Electrical),,,3,2026-08-12 09:48:06.747985+03,,3,,0.00,mpesa
+36,expense,10000.00,Said (T),,,3,2026-08-12 11:37:58.919162+03,,3,,0.00,mpesa
+37,expense,8000.00,Said (Hbb),,,3,2026-08-12 11:50:40.624689+03,,3,,0.00,mpesa
+39,withdrawal,6000.00,Customer M-Pesa withdrawal,,,3,2026-08-12 13:41:23.914822+03,,3,,0.00,
+40,withdrawal,500.00,Customer M-Pesa withdrawal,,,3,2026-08-12 13:42:18.871096+03,,3,,0.00,
+41,expense,100.00,from simba,,,3,2026-08-12 14:42:17.460445+03,,3,,0.00,cash
+38,expense,30.00,Transport to simba,,,3,2026-08-12 12:45:48.923293+03,2026-08-12 14:42:30.875259+03,3,,0.00,cash
+42,expense,2000.00,To Swaleh (Memon Arif),,,3,2026-08-12 14:54:02.210778+03,,3,,0.00,mpesa
+43,transfer,320.00,Give money to Rupenkumar Patel,,,3,2026-08-12 15:35:30.467478+03,,3,,0.00,
+44,transfer,320.00,Get money back from Rupenkumar Patel,,,3,2026-08-12 15:35:47.489244+03,,3,,0.00,
+45,transfer,500.00,Give money to Ammar Batheif,,,3,2026-08-12 15:38:14.853287+03,,3,,0.00,
+46,transfer,500.00,Get money back from Ammar Batheif,,,3,2026-08-12 15:39:02.597298+03,,3,,0.00,
+47,withdrawal,6000.00,Douglas Zake,,,3,2026-08-12 15:41:50.043986+03,,3,,0.00,
+48,withdrawal,65000.00,Customer M-Pesa withdrawal,,,3,2026-08-12 15:42:30.06759+03,,3,,0.00,
+49,withdrawal,2000.00,Customer M-Pesa withdrawal,,,3,2026-08-12 15:42:50.91057+03,,3,,0.00,
+50,transfer,80000.00,Give money to Amar Maery,,,3,2026-08-12 17:55:12.074901+03,,3,,0.00,
+51,sale,1850.00,,,,3,2026-08-12 17:55:27.701445+03,,3,1850.00,0.00,cash
+52,sale,2825.00,,,,3,2026-08-12 17:57:56.233065+03,,3,2825.00,0.00,mpesa
+53,transfer,34000.00,Give money to Rayyan Swaleh,,,3,2026-08-12 17:59:19.065043+03,,3,,0.00,
+54,transfer,34000.00,Get money back from Rayyan Swaleh,,,3,2026-08-12 17:59:33.193527+03,,3,,0.00,
+55,expense,100.00,from simba,,,3,2026-08-12 18:03:26.848142+03,,3,,0.00,cash
+56,expense,30000.00,Safaricom 2,,,3,2026-08-13 12:39:46.200913+03,,3,,0.00,mpesa
+57,expense,100.00,wahesco to shop (robin),,,3,2026-08-13 14:03:08.307432+03,,3,,0.00,cash
+34,sale,1200.00,,,,3,2026-08-11 18:00:00+03,2026-08-13 15:48:02.10791+03,3,1200.00,0.00,mpesa
+33,sale,28170.00,,,,3,2026-08-11 18:00:00+03,2026-08-13 15:48:40.214247+03,3,28170.00,0.00,cash
+59,sale,12900.00,,,,3,2026-08-13 17:51:25.052709+03,,3,12900.00,0.00,cash
+60,transfer,15600.00,Give money to Amar Maery,,,3,2026-08-13 17:55:21.554533+03,,3,,0.00,
+58,sale,8800.00,,,,3,2026-08-13 15:42:27.698834+03,2026-08-13 18:03:48.49004+03,3,8800.00,0.00,mpesa
+61,transfer,2000.00,Give money to sambula,,,3,2026-08-13 18:06:31.570467+03,,3,,0.00,
+62,withdrawal,6800.00,Customer M-Pesa withdrawal,,,3,2026-08-13 18:08:33.810962+03,,3,,0.00,
+63,deposit,2000.00,Customer M-Pesa deposit,,,3,2026-08-13 18:08:51.582355+03,,3,,0.00,
+64,expense,4800.00,Said Swaleh (k T),,,3,2026-08-14 11:32:30.00197+03,,3,,0.00,mpesa
+65,expense,1800.00,,,,3,2026-08-14 15:09:47.7594+03,,3,,0.00,mpesa
+66,transfer,40000.00,Give money to Amar Maery,,,3,2026-08-14 15:11:20.167861+03,,3,,0.00,
+67,expense,30000.00,saf 2,,,3,2026-08-14 15:14:08.756854+03,,3,,0.00,mpesa
+68,sale,480.00,,,,3,2026-08-14 18:04:32.744729+03,,3,480.00,0.00,cash
+69,sale,17950.00,,,,3,2026-08-14 18:04:40.992536+03,,3,17950.00,0.00,mpesa
