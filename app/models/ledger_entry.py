@@ -17,7 +17,15 @@ Derived balance for an account:
   SUM(amount) WHERE entry_type IN ('seed', 'credit')
   - SUM(amount) WHERE entry_type = 'debit'
 """
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, String
+from sqlalchemy import (
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -26,6 +34,22 @@ from app.core.database import Base
 
 class LedgerEntry(Base):
     __tablename__ = "ledger_entries"
+
+    __table_args__ = (
+        Index(
+            "ix_ledger_entries_business_type_entry",
+            "business_id",
+            "account_type",
+            "entry_type",
+        ),
+        Index(
+            "ix_ledger_entries_business_type_created",
+            "business_id",
+            "account_type",
+            "created_at",
+            "id",
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
 

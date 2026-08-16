@@ -10,7 +10,7 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.ledger_entry import LedgerEntry
 from app.models.transaction import Transaction
@@ -108,6 +108,7 @@ def get_ledger_statement(
     """
     entries = (
         db.query(LedgerEntry)
+        .options(selectinload(LedgerEntry.transaction))
         .filter(
             LedgerEntry.business_id == business_id,
             LedgerEntry.account_type == account_type,

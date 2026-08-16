@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, Numeric, String
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -6,6 +6,15 @@ from app.core.database import Base
 
 class Transaction(Base):
     __tablename__ = "transactions"
+
+    __table_args__ = (
+        Index(
+            "ix_transactions_business_created",
+            "business_id",
+            "created_at",
+            "id",
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
