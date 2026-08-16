@@ -16,5 +16,8 @@ venv/
 .pytest_cache/
 .coverage
 
+# Database backups
+backups/
+
 # OS & IDE
 .DS_Store
