@@ -426,15 +426,17 @@ def give_money(
     )
 
     # Validate source balance using existing repository (Cash/Float rules unchanged)
-    source_balance = ledger_repository.get_balance(db, business.id, request.source_type)
-    if request.amount > source_balance:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"Insufficient {request.source_type} balance. "
-                f"Available: KSh {source_balance:,.2f}, Requested: KSh {request.amount:,.2f}"
-            ),
-        )
+    # Skip validation when source is "bank" — money comes from outside the system
+    if request.source_type != "bank":
+        source_balance = ledger_repository.get_balance(db, business.id, request.source_type)
+        if request.amount > source_balance:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Insufficient {request.source_type} balance. "
+                    f"Available: KSh {source_balance:,.2f}, Requested: KSh {request.amount:,.2f}"
+                ),
+            )
 
     try:
         # Create Transaction record (type="transfer")
@@ -451,20 +453,21 @@ def give_money(
         db.add(txn)
         db.flush()
 
-        # Debit source (Cash or Float)
-        entry1_kwargs = {
-            "business_id": business.id,
-            "transaction_id": txn.id,
-            "account_type": request.source_type,
-            "tracked_account_id": None,
-            "entry_type": "debit",
-            "amount": request.amount,
-            "description": request.note or f"Give money to {account.name}",
-            "created_by": current_user.id,
-        }
-        if request.created_at is not None:
-            entry1_kwargs["created_at"] = request.created_at
-        db.add(LedgerEntry(**entry1_kwargs))
+        # Debit source (Cash or Float) — skip when source is "bank"
+        if request.source_type != "bank":
+            entry1_kwargs = {
+                "business_id": business.id,
+                "transaction_id": txn.id,
+                "account_type": request.source_type,
+                "tracked_account_id": None,
+                "entry_type": "debit",
+                "amount": request.amount,
+                "description": request.note or f"Give money to {account.name}",
+                "created_by": current_user.id,
+            }
+            if request.created_at is not None:
+                entry1_kwargs["created_at"] = request.created_at
+            db.add(LedgerEntry(**entry1_kwargs))
 
         # Credit destination (TrackedAccount)
         entry2_kwargs = {
@@ -560,20 +563,21 @@ def get_money_back(
             entry1_kwargs["created_at"] = request.created_at
         db.add(LedgerEntry(**entry1_kwargs))
 
-        # Credit destination (Cash or Float)
-        entry2_kwargs = {
-            "business_id": business.id,
-            "transaction_id": txn.id,
-            "account_type": request.destination_type,
-            "tracked_account_id": None,
-            "entry_type": "credit",
-            "amount": request.amount,
-            "description": request.note or f"Get money back from {account.name}",
-            "created_by": current_user.id,
-        }
-        if request.created_at is not None:
-            entry2_kwargs["created_at"] = request.created_at
-        db.add(LedgerEntry(**entry2_kwargs))
+        # Credit destination (Cash or Float) — skip when destination is "bank"
+        if request.destination_type != "bank":
+            entry2_kwargs = {
+                "business_id": business.id,
+                "transaction_id": txn.id,
+                "account_type": request.destination_type,
+                "tracked_account_id": None,
+                "entry_type": "credit",
+                "amount": request.amount,
+                "description": request.note or f"Get money back from {account.name}",
+                "created_by": current_user.id,
+            }
+            if request.created_at is not None:
+                entry2_kwargs["created_at"] = request.created_at
+            db.add(LedgerEntry(**entry2_kwargs))
 
         _link_mpesa_messages(db, business, _resolve_mpesa_message_ids(request), txn)
 
@@ -630,20 +634,21 @@ def receive_money(
         db.add(txn)
         db.flush()
 
-        # Credit destination Cash/Float (increases operational balance)
-        entry1_kwargs = {
-            "business_id": business.id,
-            "transaction_id": txn.id,
-            "account_type": request.destination_type,
-            "tracked_account_id": None,
-            "entry_type": "credit",
-            "amount": request.amount,
-            "description": request.note or f"Receive money from {account.name}",
-            "created_by": current_user.id,
-        }
-        if request.created_at is not None:
-            entry1_kwargs["created_at"] = request.created_at
-        db.add(LedgerEntry(**entry1_kwargs))
+        # Credit destination Cash/Float (increases operational balance) — skip when destination is "bank"
+        if request.destination_type != "bank":
+            entry1_kwargs = {
+                "business_id": business.id,
+                "transaction_id": txn.id,
+                "account_type": request.destination_type,
+                "tracked_account_id": None,
+                "entry_type": "credit",
+                "amount": request.amount,
+                "description": request.note or f"Receive money from {account.name}",
+                "created_by": current_user.id,
+            }
+            if request.created_at is not None:
+                entry1_kwargs["created_at"] = request.created_at
+            db.add(LedgerEntry(**entry1_kwargs))
 
         # Credit held position account (increases held balance)
         entry2_kwargs = {
@@ -700,16 +705,17 @@ def return_money(
         current_user.id,
     )
 
-    # Validate source operational Cash/Float balance
-    source_balance = ledger_repository.get_balance(db, business.id, request.source_type)
-    if request.amount > source_balance:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                f"Insufficient {request.source_type} balance. "
-                f"Available: KSh {source_balance:,.2f}, Requested: KSh {request.amount:,.2f}"
-            ),
-        )
+    # Validate source operational Cash/Float balance — skip when source is "bank"
+    if request.source_type != "bank":
+        source_balance = ledger_repository.get_balance(db, business.id, request.source_type)
+        if request.amount > source_balance:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Insufficient {request.source_type} balance. "
+                    f"Available: KSh {source_balance:,.2f}, Requested: KSh {request.amount:,.2f}"
+                ),
+            )
 
     # Validate held account balance (never allow held balance to go below 0)
     held_balance = tracked_account_repository.get_balance(
@@ -736,20 +742,21 @@ def return_money(
         db.add(txn)
         db.flush()
 
-        # Debit source Cash/Float (decreases operational balance)
-        entry1_kwargs = {
-            "business_id": business.id,
-            "transaction_id": txn.id,
-            "account_type": request.source_type,
-            "tracked_account_id": None,
-            "entry_type": "debit",
-            "amount": request.amount,
-            "description": request.note or f"Return money to {account.name}",
-            "created_by": current_user.id,
-        }
-        if request.created_at is not None:
-            entry1_kwargs["created_at"] = request.created_at
-        db.add(LedgerEntry(**entry1_kwargs))
+        # Debit source Cash/Float (decreases operational balance) — skip when source is "bank"
+        if request.source_type != "bank":
+            entry1_kwargs = {
+                "business_id": business.id,
+                "transaction_id": txn.id,
+                "account_type": request.source_type,
+                "tracked_account_id": None,
+                "entry_type": "debit",
+                "amount": request.amount,
+                "description": request.note or f"Return money to {account.name}",
+                "created_by": current_user.id,
+            }
+            if request.created_at is not None:
+                entry1_kwargs["created_at"] = request.created_at
+            db.add(LedgerEntry(**entry1_kwargs))
 
         # Debit held position account (decreases held balance)
         entry2_kwargs = {

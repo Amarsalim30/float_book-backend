@@ -849,3 +849,104 @@ def test_receive_and_return_money_with_multiple_mpesa_messages(client, auth_head
     ret_txn_data = client.get(f"/api/v1/transactions/{ret_txn_id}", headers=auth_headers).json()
     assert [m["id"] for m in ret_txn_data["mpesa_messages"]] == [ret1, ret2]
 
+
+def test_bank_transfers_do_not_affect_cash_or_float(client, auth_headers):
+    _complete_onboarding(client, auth_headers, cash=10000.0, float_bal=50000.0)
+
+    # 1. Give Money via bank: external money given to tracked account
+    acct = client.post(
+        "/api/v1/tracked-accounts/",
+        headers=auth_headers,
+        json={"name": "Bank Supplier", "account_type": "business"},
+    ).json()
+    acct_id = acct["id"]
+
+    give_res = client.post(
+        "/api/v1/tracked-accounts/give",
+        headers=auth_headers,
+        json={
+            "source_type": "bank",
+            "tracked_account_id": acct_id,
+            "amount": 75000.0,  # Exceeds opening cash + float; should succeed because bank is not capped by ledger
+            "note": "Bank wire for inventory",
+        },
+    )
+    assert give_res.status_code == 201, give_res.json()
+
+    # Tracked account balance increased
+    detail = client.get(f"/api/v1/tracked-accounts/{acct_id}", headers=auth_headers).json()
+    assert float(detail["balance"]) == 75000.0
+
+    # Cash and float balances unchanged
+    dash = client.get("/api/v1/dashboard/", headers=auth_headers).json()
+    assert float(dash["cash_balance"]) == 10000.0
+    assert float(dash["float_balance"]) == 50000.0
+
+    # 2. Get Money Back via bank
+    get_res = client.post(
+        "/api/v1/tracked-accounts/get-back",
+        headers=auth_headers,
+        json={
+            "destination_type": "bank",
+            "tracked_account_id": acct_id,
+            "amount": 25000.0,
+            "note": "Repaid to personal bank",
+        },
+    )
+    assert get_res.status_code == 201, get_res.json()
+
+    detail = client.get(f"/api/v1/tracked-accounts/{acct_id}", headers=auth_headers).json()
+    assert float(detail["balance"]) == 50000.0
+
+    dash = client.get("/api/v1/dashboard/", headers=auth_headers).json()
+    assert float(dash["cash_balance"]) == 10000.0
+    assert float(dash["float_balance"]) == 50000.0
+
+    # 3. Receive Money via bank (Held position)
+    held_acct = client.post(
+        "/api/v1/tracked-accounts/",
+        headers=auth_headers,
+        json={"name": "Held Partner", "position_type": "held"},
+    ).json()
+    held_id = held_acct["id"]
+
+    rec_res = client.post(
+        "/api/v1/tracked-accounts/receive",
+        headers=auth_headers,
+        json={
+            "destination_type": "bank",
+            "tracked_account_id": held_id,
+            "amount": 30000.0,
+            "note": "Received into bank account",
+        },
+    )
+    assert rec_res.status_code == 201, rec_res.json()
+
+    held_detail = client.get(f"/api/v1/tracked-accounts/{held_id}", headers=auth_headers).json()
+    assert float(held_detail["balance"]) == 30000.0
+
+    dash = client.get("/api/v1/dashboard/", headers=auth_headers).json()
+    assert float(dash["cash_balance"]) == 10000.0
+    assert float(dash["float_balance"]) == 50000.0
+
+    # 4. Return Money via bank (Held position)
+    ret_res = client.post(
+        "/api/v1/tracked-accounts/return",
+        headers=auth_headers,
+        json={
+            "source_type": "bank",
+            "tracked_account_id": held_id,
+            "amount": 30000.0,
+            "note": "Returned from bank account",
+        },
+    )
+    assert ret_res.status_code == 201, ret_res.json()
+
+    held_detail = client.get(f"/api/v1/tracked-accounts/{held_id}", headers=auth_headers).json()
+    assert float(held_detail["balance"]) == 0.0
+
+    dash = client.get("/api/v1/dashboard/", headers=auth_headers).json()
+    assert float(dash["cash_balance"]) == 10000.0
+    assert float(dash["float_balance"]) == 50000.0
+
+

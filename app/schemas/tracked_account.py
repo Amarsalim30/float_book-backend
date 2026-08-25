@@ -70,7 +70,7 @@ class GiveMoneyRequest(BaseModel):
     """
     Give Money: Cash/Float → TrackedAccount (Money I Track)
     """
-    source_type: Literal["cash", "float"]
+    source_type: Literal["cash", "float", "bank"]
     person_id: Optional[int] = None
     tracked_account_id: Optional[int] = None
     amount: Decimal
@@ -97,7 +97,7 @@ class GetMoneyBackRequest(BaseModel):
     """
     Get Money Back: TrackedAccount → Cash/Float (Money I Track)
     """
-    destination_type: Literal["cash", "float"]
+    destination_type: Literal["cash", "float", "bank"]
     person_id: Optional[int] = None
     tracked_account_id: Optional[int] = None
     amount: Decimal
@@ -124,7 +124,7 @@ class ReceiveMoneyRequest(BaseModel):
     """
     Receive Money: Contact → Cash/Float (Money Held - increases held balance & cash/float)
     """
-    destination_type: Literal["cash", "float"]
+    destination_type: Literal["cash", "float", "bank"]
     person_id: Optional[int] = None
     tracked_account_id: Optional[int] = None
     amount: Decimal
@@ -151,7 +151,7 @@ class ReturnMoneyRequest(BaseModel):
     """
     Return Money: Cash/Float → Contact (Money Held - decreases held balance & cash/float)
     """
-    source_type: Literal["cash", "float"]
+    source_type: Literal["cash", "float", "bank"]
     person_id: Optional[int] = None
     tracked_account_id: Optional[int] = None
     amount: Decimal
