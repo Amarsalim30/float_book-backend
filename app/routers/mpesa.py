@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
@@ -23,14 +23,15 @@ def ingest_message(
 
 @router.get("/messages", response_model=List[MpesaMessageResponse])
 def get_recent_messages(
-    direction: str = Query("MONEY_RECEIVED"),
+    direction: Optional[str] = Query("MONEY_RECEIVED"),
     unused: bool = Query(True),
-    limit: int = Query(20, ge=1, le=100),
+    limit: Optional[int] = Query(None, ge=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Get recent unused M-Pesa messages for manual selection when recording
     a transaction or transfer with SMS proof."""
+    # ponytail: list without arbitrary 20 or le=100 hard cap
     return mpesa_service.get_recent_messages(
         db, current_user, direction=direction, unused=unused, limit=limit
     )

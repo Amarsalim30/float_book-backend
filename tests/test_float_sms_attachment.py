@@ -327,3 +327,39 @@ def test_prune_unused_messages_respects_retention(client, auth_headers, test_db)
     assert deleted == 1
     remaining = test_db.query(MpesaMessage).all()
     assert {m.reference for m in remaining} == {"RECENTUNUSED", "OLDUSED"}
+
+
+def test_list_messages_no_hard_cap_and_custom_limit(client, auth_headers):
+    _complete_onboarding(client, auth_headers)
+    # Ingest 25 unused messages (exceeding old 20 default limit)
+    for i in range(25):
+        _ingest(client, auth_headers, f"BULK{i:03d}", "MONEY_RECEIVED")
+
+    # Default list without limit returns all 25 messages (no 20 hard cap)
+    res = client.get("/api/v1/mpesa/messages?direction=MONEY_RECEIVED&unused=true", headers=auth_headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert len(data) == 25
+
+    # Explicit limit=5 restricts to 5
+    res_lim = client.get("/api/v1/mpesa/messages?direction=MONEY_RECEIVED&unused=true&limit=5", headers=auth_headers)
+    assert res_lim.status_code == 200
+    assert len(res_lim.json()) == 5
+
+    # Limit > 100 is supported without 422 validation error
+    res_high = client.get("/api/v1/mpesa/messages?direction=MONEY_RECEIVED&unused=true&limit=150", headers=auth_headers)
+    assert res_high.status_code == 200
+    assert len(res_high.json()) == 25
+
+    # Attach one message to a transaction and verify unused=false
+    attached_id = data[0]["id"]
+    client.post(
+        "/api/v1/transactions/",
+        headers=auth_headers,
+        json={"type": "withdrawal", "amount": 500.0, "mpesa_message_id": attached_id},
+    )
+
+    res_used = client.get("/api/v1/mpesa/messages?direction=MONEY_RECEIVED&unused=false", headers=auth_headers)
+    assert res_used.status_code == 200
+    assert any(m["id"] == attached_id for m in res_used.json())
+
