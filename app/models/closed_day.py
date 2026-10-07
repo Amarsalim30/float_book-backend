@@ -34,7 +34,7 @@ class ClosedDay(Base):
     business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
     closed_date = Column(Date, nullable=False)
 
-    # Cash in Till
+    # Cash
     opening_cash = Column(Numeric(14, 2), nullable=False)
     expected_cash = Column(Numeric(14, 2), nullable=False)
     actual_cash = Column(Numeric(14, 2), nullable=False)

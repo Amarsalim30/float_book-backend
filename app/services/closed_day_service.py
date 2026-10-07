@@ -188,9 +188,28 @@ def close_day(db: Session, current_user: User, request: CloseDayRequest) -> Clos
             detail="Business not found. Complete onboarding first.",
         )
 
-    # Compute today's expected numbers
+    today_date, _ = _get_day_bounds_utc()
+    target_date = request.closed_date or today_date
+
+    # Check if record already exists for this date and clean up prior adjustment
+    existing = closed_day_repository.get_by_date(db, business.id, target_date)
+    if existing and existing.adjustment_transaction_id:
+        old_adj_tx = (
+            db.query(Transaction)
+            .filter(
+                Transaction.id == existing.adjustment_transaction_id,
+                Transaction.business_id == business.id,
+            )
+            .first()
+        )
+        if old_adj_tx:
+            db.query(LedgerEntry).filter(LedgerEntry.transaction_id == old_adj_tx.id).delete()
+            db.delete(old_adj_tx)
+            existing.adjustment_transaction_id = None
+            db.flush()
+
+    # Compute today's expected numbers (clean of any prior adjustment)
     recon = get_today_reconciliation(db, current_user)
-    target_date = request.closed_date or recon.date
 
     cash_variance = request.actual_cash - recon.expected_cash
     float_variance = request.actual_float - recon.expected_float
@@ -237,8 +256,6 @@ def close_day(db: Session, current_user: User, request: CloseDayRequest) -> Clos
                 transaction_id=adj_tx.id,
             )
 
-    # Check if record already exists for this date
-    existing = closed_day_repository.get_by_date(db, business.id, target_date)
     if existing:
         existing.opening_cash = recon.opening_cash
         existing.expected_cash = recon.expected_cash
@@ -253,6 +270,8 @@ def close_day(db: Session, current_user: User, request: CloseDayRequest) -> Clos
         existing.post_adjustment = request.post_adjustment
         if adj_tx:
             existing.adjustment_transaction_id = adj_tx.id
+        elif not request.post_adjustment or is_balanced:
+            existing.adjustment_transaction_id = None
         existing.closed_by = current_user.id
         db.flush()
         db.commit()

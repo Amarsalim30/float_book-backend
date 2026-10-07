@@ -158,3 +158,59 @@ def test_close_day_with_adjustment_posting(client, auth_headers):
     dash_res = client.get("/api/v1/dashboard/", headers=auth_headers)
     assert dash_res.status_code == 200
     assert Decimal(str(dash_res.json()["cash_balance"])) == Decimal("9500.00")
+
+    # Resubmit close day: actual count is corrected to 9800.00 (short 200 instead of 500)
+    resubmit_res = client.post(
+        "/api/v1/close-day",
+        json={
+            "actual_cash": "9800.00",
+            "actual_float": "30000.00",
+            "notes": "Found 300 in till, updated shortage 200",
+            "post_adjustment": True,
+        },
+        headers=auth_headers,
+    )
+    assert resubmit_res.status_code == 201
+    resubmit_data = resubmit_res.json()
+    assert Decimal(str(resubmit_data["cash_variance"])) == Decimal("-200.00")
+
+    # Balance must reflect the updated count (9800), not double adjusted
+    dash_res_updated = client.get("/api/v1/dashboard/", headers=auth_headers)
+    assert dash_res_updated.status_code == 200
+    assert Decimal(str(dash_res_updated.json()["cash_balance"])) == Decimal("9800.00")
+
+
+def test_dashboard_detects_offsetting_discrepancy(client, auth_headers):
+    # Complete onboarding
+    client.post(
+        "/api/v1/onboarding/complete",
+        json={
+            "business_name": "Offsetting Shop",
+            "opening_cash": 10000.00,
+            "opening_float": 30000.00,
+        },
+        headers=auth_headers,
+    )
+
+    # Cash is short 500 (9500), Float is over 500 (30500)
+    # Net variance sum is 0, but status is discrepancy
+    close_res = client.post(
+        "/api/v1/close-day",
+        json={
+            "actual_cash": "9500.00",
+            "actual_float": "30500.00",
+            "notes": "Drawer swap between cash and float",
+            "post_adjustment": False,
+        },
+        headers=auth_headers,
+    )
+    assert close_res.status_code == 201
+
+    dash_res = client.get("/api/v1/dashboard/", headers=auth_headers)
+    assert dash_res.status_code == 200
+    data = dash_res.json()
+    assert data["day_closed"] is True
+    assert data["day_status"] == "discrepancy"
+    assert Decimal(str(data["closing_cash_variance"])) == Decimal("-500.00")
+    assert Decimal(str(data["closing_float_variance"])) == Decimal("500.00")
+

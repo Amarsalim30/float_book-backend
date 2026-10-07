@@ -57,11 +57,14 @@ def get_dashboard(db: Session, current_user: User) -> DashboardResponse:
         float_balance=float_balance,
         today_activity=activity_items,
         day_closed=closed_today is not None,
+        day_status=closed_today.status if closed_today else None,
         closing_variance=(
             (closed_today.cash_variance + closed_today.float_variance)
             if closed_today
             else None
         ),
+        closing_cash_variance=closed_today.cash_variance if closed_today else None,
+        closing_float_variance=closed_today.float_variance if closed_today else None,
     )
 
 

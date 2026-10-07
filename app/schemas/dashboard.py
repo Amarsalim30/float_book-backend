@@ -33,4 +33,7 @@ class DashboardResponse(BaseModel):
     float_balance: Decimal
     today_activity: List[ActivityItem]
     day_closed: bool = False
+    day_status: Optional[str] = None  # "balanced" | "discrepancy"
     closing_variance: Optional[Decimal] = None
+    closing_cash_variance: Optional[Decimal] = None
+    closing_float_variance: Optional[Decimal] = None
