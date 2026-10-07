@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.core.database import SessionLocal
-from app.routers import auth, dashboard, transactions, people, onboarding, mpesa, tracked_accounts, ledger
+from app.routers import auth, dashboard, transactions, people, onboarding, mpesa, tracked_accounts, ledger, closed_day
 from app.services import mpesa_service
 
 logging.basicConfig(
@@ -61,6 +61,7 @@ app.include_router(ledger.router, prefix=settings.API_PREFIX)
 app.include_router(people.router, prefix=settings.API_PREFIX)
 app.include_router(mpesa.router, prefix=settings.API_PREFIX)
 app.include_router(tracked_accounts.router, prefix=settings.API_PREFIX)
+app.include_router(closed_day.router, prefix=settings.API_PREFIX)
 
 
 @app.get("/health")

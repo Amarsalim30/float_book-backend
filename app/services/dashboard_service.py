@@ -1,9 +1,13 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models.user import User
-from app.repositories import business_repository, ledger_repository, transaction_repository
+from app.repositories import business_repository, closed_day_repository, ledger_repository, transaction_repository
 from app.schemas.dashboard import ActivityItem, DashboardResponse, LedgerEffect
+
+NAIROBI_TZ = ZoneInfo("Africa/Nairobi")
 
 
 def get_dashboard(db: Session, current_user: User) -> DashboardResponse:
@@ -18,6 +22,10 @@ def get_dashboard(db: Session, current_user: User) -> DashboardResponse:
     float_balance = ledger_repository.get_balance(db, business.id, "float")
 
     today_txns = transaction_repository.get_today_by_business(db, business.id, limit=10)
+
+    # Check if today is already closed
+    today_date = datetime.now(NAIROBI_TZ).date()
+    closed_today = closed_day_repository.get_by_date(db, business.id, today_date)
 
     activity_items = [
         ActivityItem(
@@ -48,8 +56,12 @@ def get_dashboard(db: Session, current_user: User) -> DashboardResponse:
         cash_balance=cash_balance,
         float_balance=float_balance,
         today_activity=activity_items,
-        day_closed=False,
-        closing_variance=None,
+        day_closed=closed_today is not None,
+        closing_variance=(
+            (closed_today.cash_variance + closed_today.float_variance)
+            if closed_today
+            else None
+        ),
     )
 
 
