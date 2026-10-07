@@ -9,6 +9,7 @@ class TransactionType(str, Enum):
     ADD_FLOAT = "add_float"
     ADD_CASH = "add_cash"
     TRANSFER = "transfer"
+    ADJUSTMENT = "adjustment"
 
 
 class TransactionSource(str, Enum):
