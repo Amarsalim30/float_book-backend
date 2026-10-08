@@ -34,6 +34,19 @@ def create_message(
 
     existing = mpesa_repository.get_by_reference(db, business.id, request.reference)
     if existing:
+        # If existing message is unlinked and incoming message is a float message
+        # while existing is non-float (e.g. head-office settlement vs customer deposit),
+        # supersede the non-float record.
+        existing_has_float = "float balance" in existing.raw_text.lower()
+        incoming_has_float = "float balance" in request.raw_text.lower()
+        if existing.transaction_id is None and incoming_has_float and not existing_has_float:
+            existing.sender = request.sender
+            existing.amount = request.amount
+            existing.direction = request.direction
+            existing.raw_text = request.raw_text
+            existing.message_timestamp = request.message_timestamp
+            db.commit()
+            db.refresh(existing)
         return MpesaMessageResponse.model_validate(existing)
 
     try:
