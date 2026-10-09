@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
@@ -25,6 +26,7 @@ def ingest_message(
 def get_recent_messages(
     direction: Optional[str] = Query(None),
     unused: bool = Query(True),
+    date_from: Optional[datetime] = Query(None),
     limit: Optional[int] = Query(None, ge=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -33,5 +35,5 @@ def get_recent_messages(
     a transaction or transfer with SMS proof."""
     # ponytail: list without arbitrary 20 or le=100 hard cap
     return mpesa_service.get_recent_messages(
-        db, current_user, direction=direction, unused=unused, limit=limit
+        db, current_user, direction=direction, unused=unused, date_from=date_from, limit=limit
     )

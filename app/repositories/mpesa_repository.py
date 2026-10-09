@@ -1,3 +1,4 @@
+from datetime import datetime
 from sqlalchemy.orm import Session
 from app.models.mpesa_message import MpesaMessage
 
@@ -33,9 +34,10 @@ def get_messages(
     business_id: int,
     direction: str | None = None,
     unused: bool | None = True,
+    date_from: datetime | None = None,
     limit: int | None = None,
 ) -> list[MpesaMessage]:
-    """Query M-Pesa messages for a business with optional direction, unused filter, and limit."""
+    """Query M-Pesa messages for a business with optional direction, unused filter, date_from, and limit."""
     # ponytail: unified query with no artificial hard cap
     query = db.query(MpesaMessage).filter(MpesaMessage.business_id == business_id)
     if direction is not None:
@@ -44,6 +46,8 @@ def get_messages(
         query = query.filter(MpesaMessage.transaction_id.is_(None))
     elif unused is False:
         query = query.filter(MpesaMessage.transaction_id.is_not(None))
+    if date_from is not None:
+        query = query.filter(MpesaMessage.message_timestamp >= date_from)
     query = query.order_by(MpesaMessage.message_timestamp.desc())
     if limit is not None:
         query = query.limit(limit)
@@ -51,10 +55,21 @@ def get_messages(
 
 
 def get_recent_unused(
-    db: Session, business_id: int, direction: str | None = None, limit: int | None = None
+    db: Session,
+    business_id: int,
+    direction: str | None = None,
+    date_from: datetime | None = None,
+    limit: int | None = None,
 ) -> list[MpesaMessage]:
     """Get recent unused M-Pesa messages of *direction* for a business."""
-    return get_messages(db, business_id=business_id, direction=direction, unused=True, limit=limit)
+    return get_messages(
+        db,
+        business_id=business_id,
+        direction=direction,
+        unused=True,
+        date_from=date_from,
+        limit=limit,
+    )
 
 
 def get_recent_unused_incoming(db: Session, business_id: int, limit: int | None = None) -> list[MpesaMessage]:

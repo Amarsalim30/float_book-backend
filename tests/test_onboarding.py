@@ -46,3 +46,13 @@ def test_dashboard_unrecorded_mpesa(client, auth_headers):
     data = dash_res.json()
     assert data["unrecorded_mpesa_count"] == 1
     assert float(data["unrecorded_mpesa_total"]) == 2500.00
+
+    # Filter with future cutoff -> should return 0
+    dash_filtered = client.get("/api/v1/dashboard?unrecorded_from=2026-10-10T00:00:00Z", headers=auth_headers)
+    assert dash_filtered.status_code == 200
+    assert dash_filtered.json()["unrecorded_mpesa_count"] == 0
+
+    # Messages endpoint with date_from filter
+    msgs_filtered = client.get("/api/v1/mpesa/messages?unused=true&date_from=2026-10-10T00:00:00Z", headers=auth_headers)
+    assert msgs_filtered.status_code == 200
+    assert len(msgs_filtered.json()) == 0

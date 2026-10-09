@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends
+from datetime import datetime
+from typing import Optional
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -12,7 +14,10 @@ router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 @router.get("/", response_model=DashboardResponse)
 def get_dashboard(
+    unrecorded_from: Optional[datetime] = Query(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    return dashboard_service.get_dashboard(db, current_user)
+    return dashboard_service.get_dashboard(
+        db, current_user, unrecorded_from=unrecorded_from
+    )

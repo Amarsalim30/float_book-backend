@@ -89,8 +89,9 @@ def create_message(
 def get_recent_messages(
     db: Session,
     current_user: User,
-    direction: str | None = "MONEY_RECEIVED",
+    direction: str | None = None,
     unused: bool = True,
+    date_from: datetime | None = None,
     limit: int | None = None,
 ) -> list[MpesaMessageResponse]:
     business = business_repository.get_by_owner(db, current_user.id)
@@ -99,7 +100,12 @@ def get_recent_messages(
 
     # ponytail: remove arbitrary direction restrictions and hard cap
     messages = mpesa_repository.get_messages(
-        db, business_id=business.id, direction=direction, unused=unused, limit=limit
+        db,
+        business_id=business.id,
+        direction=direction,
+        unused=unused,
+        date_from=date_from,
+        limit=limit,
     )
 
     return [MpesaMessageResponse.model_validate(msg) for msg in messages]

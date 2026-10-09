@@ -11,7 +11,11 @@ from app.schemas.dashboard import ActivityItem, DashboardResponse, LedgerEffect
 NAIROBI_TZ = ZoneInfo("Africa/Nairobi")
 
 
-def get_dashboard(db: Session, current_user: User) -> DashboardResponse:
+def get_dashboard(
+    db: Session,
+    current_user: User,
+    unrecorded_from: datetime | None = None,
+) -> DashboardResponse:
     business = business_repository.get_by_owner(db, current_user.id)
     if not business:
         raise HTTPException(
@@ -52,7 +56,9 @@ def get_dashboard(db: Session, current_user: User) -> DashboardResponse:
         for tx in today_txns
     ]
 
-    unrecorded_msgs = mpesa_repository.get_recent_unused(db, business.id)
+    unrecorded_msgs = mpesa_repository.get_recent_unused(
+        db, business.id, date_from=unrecorded_from
+    )
     unrecorded_count = len(unrecorded_msgs)
     unrecorded_total = sum((Decimal(str(m.amount)) for m in unrecorded_msgs), Decimal("0.00"))
 
