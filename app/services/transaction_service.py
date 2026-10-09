@@ -122,6 +122,11 @@ def _compute_effects(
             EffectSpec(account_type="float", direction="credit", amount=request.amount),
         ]
 
+    elif request.type == "remove_float":
+        effects_spec = [
+            EffectSpec(account_type="float", direction="debit", amount=request.amount),
+        ]
+
     elif request.type == "add_cash":
         effects_spec = [
             EffectSpec(account_type="cash", direction="credit", amount=request.amount),

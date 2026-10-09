@@ -187,3 +187,29 @@ def test_add_float_optional_note(client, auth_headers):
         json={"type": "add_float", "amount": 2500.0},
     )
     assert res.status_code in (200, 201), res.json()
+
+
+def test_remove_float_ledger_effects(client, auth_headers):
+    """Remove Float KES 800,000 → Float -800,000 (debit). Cash is unaffected."""
+    _complete_onboarding(client, auth_headers)
+
+    res = client.post(
+        "/api/v1/transactions/",
+        headers=auth_headers,
+        json={
+            "type": "remove_float",
+            "amount": 800000.0,
+            "description": "Administrator float removal",
+        },
+    )
+    assert res.status_code in (200, 201), res.json()
+    data = res.json()
+
+    assert data["type"] == "remove_float"
+    assert data["amount"] == "800000.00"
+
+    effects = data["effects"]
+    assert len(effects) == 1
+    assert effects[0]["account_type"] == "float"
+    assert effects[0]["direction"] == "debit"
+    assert effects[0]["amount"] == "800000.00"

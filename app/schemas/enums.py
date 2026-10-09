@@ -7,6 +7,7 @@ class TransactionType(str, Enum):
     WITHDRAWAL = "withdrawal"
     DEPOSIT = "deposit"
     ADD_FLOAT = "add_float"
+    REMOVE_FLOAT = "remove_float"
     ADD_CASH = "add_cash"
     TRANSFER = "transfer"
     ADJUSTMENT = "adjustment"

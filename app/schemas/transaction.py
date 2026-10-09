@@ -36,6 +36,7 @@ class TransactionCreate(BaseModel):
             "withdrawal",
             "deposit",
             "add_float",
+            "remove_float",
             "add_cash",
             "transfer",
             "repayment",
