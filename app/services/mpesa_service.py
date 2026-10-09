@@ -12,6 +12,21 @@ from app.schemas.mpesa import MpesaMessageCreate, MpesaMessageResponse
 settings = get_settings()
 
 
+def is_float_message(raw_text: str) -> bool:
+    """Returns True if the message represents an M-Pesa float movement or balance."""
+    # ponytail: lean check covering all float-affecting phrasing without heavy dependencies
+    t = raw_text.lower()
+    return (
+        "float balance" in t
+        or "working to float" in t
+        or "float to working" in t
+        or "added to your m-pesa float" in t
+        or "removed from your m-pesa float" in t
+        or "float account balance" in t
+        or "your float balance" in t
+    )
+
+
 def create_message(
     db: Session, current_user: User, request: MpesaMessageCreate
 ) -> MpesaMessageResponse:
@@ -35,10 +50,10 @@ def create_message(
     existing = mpesa_repository.get_by_reference(db, business.id, request.reference)
     if existing:
         # If existing message is unlinked and incoming message is a float message
-        # while existing is non-float (e.g. head-office settlement vs customer deposit),
+        # while existing is non-float (e.g. head-office settlement vs customer deposit/admin float),
         # supersede the non-float record.
-        existing_has_float = "float balance" in existing.raw_text.lower()
-        incoming_has_float = "float balance" in request.raw_text.lower()
+        existing_has_float = is_float_message(existing.raw_text)
+        incoming_has_float = is_float_message(request.raw_text)
         if existing.transaction_id is None and incoming_has_float and not existing_has_float:
             existing.sender = request.sender
             existing.amount = request.amount

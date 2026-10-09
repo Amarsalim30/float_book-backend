@@ -425,18 +425,8 @@ def give_money(
         current_user.id,
     )
 
-    # Validate source balance using existing repository (Cash/Float rules unchanged)
-    # Skip validation when source is "bank" — money comes from outside the system
-    if request.source_type != "bank":
-        source_balance = ledger_repository.get_balance(db, business.id, request.source_type)
-        if request.amount > source_balance:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"Insufficient {request.source_type} balance. "
-                    f"Available: KSh {source_balance:,.2f}, Requested: KSh {request.amount:,.2f}"
-                ),
-            )
+    # ponytail: do not block users from recording actual transactions when operational balance is un-synced
+    # Cash and float balances can temporarily reflect real-world movements before top-ups are logged.
 
     try:
         # Create Transaction record (type="transfer")
@@ -705,17 +695,7 @@ def return_money(
         current_user.id,
     )
 
-    # Validate source operational Cash/Float balance — skip when source is "bank"
-    if request.source_type != "bank":
-        source_balance = ledger_repository.get_balance(db, business.id, request.source_type)
-        if request.amount > source_balance:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"Insufficient {request.source_type} balance. "
-                    f"Available: KSh {source_balance:,.2f}, Requested: KSh {request.amount:,.2f}"
-                ),
-            )
+    # ponytail: do not block users from recording actual transactions when operational balance is un-synced
 
     # Validate held account balance (never allow held balance to go below 0)
     held_balance = tracked_account_repository.get_balance(

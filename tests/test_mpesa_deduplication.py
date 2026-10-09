@@ -96,3 +96,38 @@ def test_different_businesses_can_have_same_reference(client, auth_headers):
     # Unique records created for each business
     assert res1.json()["id"] != res2.json()["id"]
     assert res1.json()["reference"] == res2.json()["reference"] == "SHARED_REF_999"
+
+
+def test_float_message_supersedes_non_float_record(client, auth_headers):
+    """When a non-float SMS is ingested and later a float SMS (like admin float removal) arrives with same ref, it supersedes it."""
+    _complete_onboarding(client, auth_headers)
+
+    non_float_payload = {
+        "reference": "UIBSJ3JX2B",
+        "sender": "MALSAT TRADERS",
+        "amount": 800000.0,
+        "direction": "MONEY_RECEIVED",
+        "raw_text": "UIBSJ3JX2B Confirmed. You have received Ksh800,000.00 from MALSAT TRADERS. New M-PESA balance is Ksh800,000.00.",
+        "message_timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    res1 = client.post("/api/v1/mpesa/messages", headers=auth_headers, json=non_float_payload)
+    assert res1.status_code == 201
+    msg1 = res1.json()
+
+    # Now incoming admin float message arrives with same ref
+    float_payload = {
+        "reference": "UIBSJ3JX2B",
+        "sender": "Administrator at MALSAT TRADERS LTD",
+        "amount": 800000.0,
+        "direction": "MONEY_SENT",
+        "raw_text": "UIBSJ3JX2B Confirmed.Ksh800,000.00 was removed from your M-PESA float by Administrator at MALSAT TRADERS LTD on 11/9/26 at 9:36 PM. New M-PESA balance is Ksh76,111.00.",
+        "message_timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    res2 = client.post("/api/v1/mpesa/messages", headers=auth_headers, json=float_payload)
+    assert res2.status_code in (200, 201)
+    msg2 = res2.json()
+
+    assert msg2["id"] == msg1["id"]
+    assert msg2["direction"] == "MONEY_SENT"
+    assert "was removed from your M-PESA float" in msg2["raw_text"]
+
