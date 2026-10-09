@@ -1,10 +1,11 @@
 from datetime import datetime
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models.user import User
-from app.repositories import business_repository, closed_day_repository, ledger_repository, transaction_repository
+from app.repositories import business_repository, closed_day_repository, ledger_repository, mpesa_repository, transaction_repository
 from app.schemas.dashboard import ActivityItem, DashboardResponse, LedgerEffect
 
 NAIROBI_TZ = ZoneInfo("Africa/Nairobi")
@@ -51,6 +52,10 @@ def get_dashboard(db: Session, current_user: User) -> DashboardResponse:
         for tx in today_txns
     ]
 
+    unrecorded_msgs = mpesa_repository.get_recent_unused(db, business.id)
+    unrecorded_count = len(unrecorded_msgs)
+    unrecorded_total = sum((Decimal(str(m.amount)) for m in unrecorded_msgs), Decimal("0.00"))
+
     return DashboardResponse(
         business_name=business.business_name,
         cash_balance=cash_balance,
@@ -65,6 +70,8 @@ def get_dashboard(db: Session, current_user: User) -> DashboardResponse:
         ),
         closing_cash_variance=closed_today.cash_variance if closed_today else None,
         closing_float_variance=closed_today.float_variance if closed_today else None,
+        unrecorded_mpesa_count=unrecorded_count,
+        unrecorded_mpesa_total=unrecorded_total,
     )
 
 

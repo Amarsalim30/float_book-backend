@@ -23,7 +23,7 @@ def ingest_message(
 
 @router.get("/messages", response_model=List[MpesaMessageResponse])
 def get_recent_messages(
-    direction: Optional[str] = Query("MONEY_RECEIVED"),
+    direction: Optional[str] = Query(None),
     unused: bool = Query(True),
     limit: Optional[int] = Query(None, ge=1),
     db: Session = Depends(get_db),

@@ -37,3 +37,5 @@ class DashboardResponse(BaseModel):
     closing_variance: Optional[Decimal] = None
     closing_cash_variance: Optional[Decimal] = None
     closing_float_variance: Optional[Decimal] = None
+    unrecorded_mpesa_count: int = 0
+    unrecorded_mpesa_total: Decimal = Decimal("0.00")
