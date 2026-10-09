@@ -191,3 +191,45 @@ def test_expense_negative_amount_rejected(client, auth_headers):
         },
     )
     assert res.status_code == 422
+
+
+def test_expense_with_mpesa_sms_auto_forces_mpesa(client, auth_headers):
+    """If an M-Pesa SMS is attached to an expense, payment_method is auto-forced to mpesa and debits float."""
+    from datetime import datetime, timezone
+    _complete_onboarding(client, auth_headers)
+
+    # Ingest an SMS
+    sms_res = client.post(
+        "/api/v1/mpesa/messages",
+        headers=auth_headers,
+        json={
+            "reference": "EXPENSE_SMS_001",
+            "sender": "Electricity",
+            "amount": 1200.0,
+            "direction": "MONEY_SENT",
+            "raw_text": "Ksh1,200 sent to Kenya Power EXPENSE_SMS_001",
+            "message_timestamp": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+    assert sms_res.status_code == 201
+    sms_id = sms_res.json()["id"]
+
+    # Post expense with payment_method="cash" but attaching the SMS
+    res = client.post(
+        "/api/v1/transactions/",
+        headers=auth_headers,
+        json={
+            "type": "expense",
+            "amount": 1200.0,
+            "payment_method": "cash",
+            "mpesa_message_id": sms_id,
+        },
+    )
+    assert res.status_code in (200, 201), res.json()
+    data = res.json()
+    assert data["payment_method"] == "mpesa"
+    assert len(data["effects"]) == 1
+    assert data["effects"][0]["account_type"] == "float"
+    assert data["effects"][0]["direction"] == "debit"
+    assert data["effects"][0]["amount"] == "1200.00"
+

@@ -44,6 +44,10 @@ def _compute_effects(
     else:
         payment_method = request.payment_method
 
+    # ponytail: if an M-Pesa SMS is attached to an expense, force payment_method='mpesa' to debit float (prevents Tx 283 cash/float misclassification)
+    if request.type == "expense" and _resolve_mpesa_message_ids(request):
+        payment_method = "mpesa"
+
     sale_amount = request.amount
     amount_received = sale_amount
     change_amount = Decimal("0.00")
